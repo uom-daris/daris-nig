@@ -1,0 +1,13 @@
+<manifest>
+	<package>@MFPKG@</package>
+	<version>@VERSION@</version>
+	<build-time>@BUILD-TIME@</build-time>
+	<vendor>@VENDOR@</vendor>
+	<vendorurl>@URL@</vendorurl>
+	<description>@DESCRIPTION@</description>
+	<dependencies>
+		<version>@SERVER-VERSION@</version>
+		<package>daris-essentials</package>
+		<package>daris-core-services</package>
+	</dependencies>
+</manifest>
