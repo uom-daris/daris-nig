@@ -10,6 +10,10 @@
 #           action - If Method pre-exists, action = 0 (do nothing), 1 (replace), 2 (create new)
 #           mbic   - If true (defaults to false), setup MBC Imaging Unit asset namespace
 #                    (store must exist) and roles
+
+
+source old-release-cleanup.tcl
+
 # ============================================================================
 # Include the utils.tcl functions
 # ============================================================================
@@ -57,11 +61,11 @@ if { $addStudyTypes == 1 } {
 # ============================================================================
 set plugin_label      [string toupper PACKAGE_$package]
 set plugin_namespace  mflux/plugins
-set plugin_zip        nig-pssd-plugin.zip
-set plugin_jar        nig-pssd-plugin.jar
+set plugin_zip        daris-nig-plugin.zip
+set plugin_jar        daris-nig-plugin.jar
 set module_class      nig.mf.plugin.pssd.ni.NIGPSSDPluginModule
 # none of these previously to adding FMP-based functionality
-set plugin_libs       { nig-commons.jar fmjdbc.jar FMP-JDBC.jar MBC-FMP.jar AIBL-Commons.jar }
+set plugin_libs       { daris-commons.jar fmjdbc.jar }
 loadPlugin $plugin_namespace $plugin_zip $plugin_jar $module_class $plugin_label $plugin_libs
 srefresh
 
