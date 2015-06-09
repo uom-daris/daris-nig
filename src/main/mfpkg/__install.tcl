@@ -11,7 +11,6 @@
 #           mbic   - If true (defaults to false), setup MBC Imaging Unit asset namespace
 #                    (store must exist) and roles
 
-
 source old-release-cleanup.tcl
 
 # ============================================================================
