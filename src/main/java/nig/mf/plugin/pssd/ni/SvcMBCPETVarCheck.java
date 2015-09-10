@@ -117,12 +117,12 @@ public class SvcMBCPETVarCheck extends PluginService {
         String petDataSetCID = null;
         if (!petIsChecked)
             petDataSetCID = findPETDataSet(executor(), studyCID);
-        System.out.println("PET dataset: " + petDataSetCID);
+        // System.out.println("PET dataset: " + petDataSetCID);
         // Now find the CT DataSet that we want under the parent Study
         String ctDataSetCID = null;
         if (!ctIsChecked)
             ctDataSetCID = findCTDataSet(executor(), studyCID);
-        System.out.println("CT dataset: " + ctDataSetCID);
+        // System.out.println("CT dataset: " + ctDataSetCID);
         // Return if nothing found
         if (petDataSetCID == null && ctDataSetCID == null) {
             return;
@@ -519,7 +519,8 @@ public class SvcMBCPETVarCheck extends PluginService {
                     mbc.updateScanTime(mbcPatientID, date, scanTypeFMP, t2,
                             true);
                     mbc.updateDaRISID(mbcPatientID, date, scanTypeFMP, petCID);
-
+                    System.out.println("PET series " + petCID
+                            + " has been updated to FileMakerPro.");
                     // Update the parent Study meta-data saying it's been
                     // checked for PET
                     setStudyMetaData(executor, studyCID, true);
@@ -533,7 +534,8 @@ public class SvcMBCPETVarCheck extends PluginService {
                     mbc.updateScanTime(mbcPatientID, date, scanTypeFMP, t2,
                             false);
                     mbc.updateDaRISID(mbcPatientID, date, scanTypeFMP, ctCID);
-
+                    System.out.println("CT series " + ctCID
+                            + " has been updated to FileMakerPro.");
                     // Update the parent Study meta-data saying it's been
                     // checked for CT
                     setStudyMetaData(executor, studyCID, false);
