@@ -447,9 +447,9 @@ public class SvcMBCPETVarCheck extends PluginService {
         // the string '1_9' will
         // be found in the blood pool DataSet. That's not very robust is it Rob
         // !
-        String studyDescription = petDICOMMeta
+        String studyDescription = petDICOMMeta==null?null:petDICOMMeta
                 .value("de[@tag='00081030']/value");
-        Boolean isBloodPool = studyDescription.contains("1_9");
+        Boolean isBloodPool = studyDescription==null?false:studyDescription.contains("1_9");
         System.out.println("DICOM isBloodPool = " + isBloodPool);
 
         // Iterate over the FMP PET Visits
