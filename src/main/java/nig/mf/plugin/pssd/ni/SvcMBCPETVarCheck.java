@@ -441,8 +441,8 @@ public class SvcMBCPETVarCheck extends PluginService {
 						String f2s = String.format("%.1f%n", f2).trim();
 						if (dbg) System.out.println("         Doses DICOM and FMP : " +doseDICOMFormatted + " " + f2s);
 						//		s2 = "380.0";
-						if (!doseDICOMFormatted.equals(s2)) {
-							fmpDoses.add(s2);
+						if (!doseDICOMFormatted.equals(f2s)) {
+							fmpDoses.add(f2s);
 						} else {
 							matchedDose = true;
 						}
