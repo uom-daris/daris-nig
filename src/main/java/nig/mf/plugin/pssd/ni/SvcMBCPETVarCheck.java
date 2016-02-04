@@ -50,6 +50,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 		me = new Interface.Element("debug", BooleanType.DEFAULT, "Add some print diagnostics to the mediaflux server log Default is false.",
 				0, 1);
 		_defn.add(me);
+		//
+		me = new Interface.Element("force", BooleanType.DEFAULT, "Over-ride the meta-data on the Study indicating that this Study has alreayd been checked, and chedk regardless. Defaults to false.",
+				0, 1);
+		_defn.add(me);
 
 	}
 
@@ -86,6 +90,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 	public void execute(XmlDoc.Element args, Inputs in, Outputs out, XmlWriter w) throws Throwable {
 
 		// Parse input ID
+		Boolean force = args.booleanValue("force", false);
 		Boolean dbg = args.booleanValue("debug", false);
 		String studyID = args.value("id");
 		String studyCID = args.value("cid");
@@ -108,6 +113,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 		// Have we already checked this Study sufficiently ?
 		Boolean petIsChecked = checked(executor(), true, studyMeta);
 		Boolean ctIsChecked = checked(executor(), false, studyMeta);
+		if (force) {
+			petIsChecked = false;
+			ctIsChecked = false;
+		}
 		if (petIsChecked && ctIsChecked) return;
 
 		// We are going to work with one PET DataSet (any will do) and
