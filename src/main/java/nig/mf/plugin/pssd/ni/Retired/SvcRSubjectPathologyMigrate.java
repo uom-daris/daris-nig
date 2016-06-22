@@ -68,7 +68,7 @@ public class SvcRSubjectPathologyMigrate extends PluginService {
 			rSubjects = r1.values("object/id");
 		} else {
 			// Get this asset and verify it is an R-Subject; exception if not
-			PSSDUtil.isValidRSubject(executor(), cid);
+			PSSDUtil.isValidRSubject(executor(), cid, true);
 			rSubjects = new Vector<String>();
 			rSubjects.add(cid);
 		}
