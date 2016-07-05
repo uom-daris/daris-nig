@@ -1,6 +1,7 @@
 package nig.mf.plugin.pssd.ni;
 
 import java.sql.ResultSet;
+import java.util.Collection;
 import java.util.Date;
 import java.util.Vector;
 
@@ -123,9 +124,18 @@ public class SvcMBCPETVarCheck extends PluginService {
 		// one CT DataSet (has to be the right one). We expect one or both
 		// to be present generally.
 
-		// Find one (any) PET DataSet  under the given parent Study
+		// Find one (good) PET DataSet  under the given parent Study
 		String petDataSetCID = null;
-		if (!petIsChecked) petDataSetCID = findPETDataSet (executor(), studyCID);
+		if (!petIsChecked) {
+			String[] t =  findPETDataSet (executor(), studyCID);
+			if (t.length==2) {
+				// No good PET data sets found
+				System.out.println(t[1]);
+				send (executor(), email, t[1]);
+				return;				
+			}
+			petDataSetCID =t[0];
+		}
 
 		// Now find the CT DataSet that we want under the parent Study
 		String ctDataSetCID = null;
@@ -137,8 +147,8 @@ public class SvcMBCPETVarCheck extends PluginService {
 		}
 
 		// Extract the native DICOM meta-data from the DataSets. Null if no cid
-		XmlDoc.Element petDICOMMeta = dicomMetaData (executor(), petDataSetCID);
-		XmlDoc.Element ctDICOMMeta = dicomMetaData (executor(), ctDataSetCID);
+		XmlDoc.Element petDICOMMeta = dicomMetaData (executor(), petDataSetCID, null);
+		XmlDoc.Element ctDICOMMeta = dicomMetaData (executor(), ctDataSetCID, null);
 
 		// Find one "acquisition date" from the DataSets.  We need to fetch this
 		// from the DICOM header as its not in indexed meta-data.
@@ -170,7 +180,8 @@ public class SvcMBCPETVarCheck extends PluginService {
 			String message = "nig.pssd.mbc.petvar.check : Could not extract Subject citable ID from PET DataSet '" + petDataSetCID + "' or CT DataSet '" + ctDataSetCID + "'";
 			System.out.println (message);
 			send(executor(), email, message);
-			throw new Exception (message);
+			mbc.closeConnection();
+			return;
 		}
 		// Fetch Subject meta-data
 		XmlDoc.Element subjectMeta = AssetUtil.getAsset(executor(), subject, null);
@@ -178,8 +189,11 @@ public class SvcMBCPETVarCheck extends PluginService {
 		// Fetch DICOM patient Meta from Subject and extract patient name
 		XmlDoc.Element dicomPatient = subjectMeta.element("asset/meta/mf-dicom-patient");
 		if (dicomPatient==null) {
-			System.out.println ("nig.pssd.mbc.petvar.check : Could not locate mf-dicom-patient record on Subject " + subject);
-			throw new Exception ("Could not locate mf-dicom-patient record on Subject " + subject);
+			String error = "nig.pssd.mbc.petvar.check : Could not locate mf-dicom-patient record on Subject " + subject;
+			System.out.println(error);
+			send (executor(), email, error);
+			mbc.closeConnection();
+			return;
 		}
 
 		DICOMPatient dp = new DICOMPatient(dicomPatient);
@@ -244,9 +258,9 @@ public class SvcMBCPETVarCheck extends PluginService {
 		return false;
 	}
 
-	private XmlDoc.Element dicomMetaData (ServiceExecutor executor, String cid) throws Throwable {
-		if (cid==null) return null;
-		String id = CiteableIdUtil.cidToId(executor, cid);
+	private XmlDoc.Element dicomMetaData (ServiceExecutor executor, String cid, String id) throws Throwable {
+		if (cid==null && id==null) return null;
+		if (cid!=null) id = CiteableIdUtil.cidToId(executor, cid);
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.add("id", id);
 		return executor.execute("dicom.metadata.get", dm.root());
@@ -284,18 +298,32 @@ public class SvcMBCPETVarCheck extends PluginService {
 		return null;
 	}
 
-	private String findPETDataSet (ServiceExecutor executor, String cid) throws Throwable {
+	private String[] findPETDataSet (ServiceExecutor executor, String studyCID) throws Throwable {
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.add("pdist", "0");
 		dm.add("action", "get-cid");
-		dm.add("size", "1");
-		String query = "(cid='" + cid + "' or cid starts with '" + cid + "') and model='om.pssd.dataset' and xpath(mf-dicom-series/modality)='PT'";
+		dm.add("size", "infinity");
+		String query = "(cid='" + studyCID + "' or cid starts with '" + studyCID + "') and model='om.pssd.dataset' and xpath(mf-dicom-series/modality)='PT'";
 		dm.add("where", query);
 		XmlDoc.Element r = executor().execute("asset.query", dm.root());
 		if (r==null) return null;
 
-		// FInd CID of DataSet
-		return r.value("cid");
+		// We need a PET data set with the required DICOM meta-data element
+		Collection<String> cids = r.values("cid");
+		for (String cid : cids) {
+			XmlDoc.Element dicomMeta = dicomMetaData(executor, cid, null);
+			XmlDoc.Element rp = dicomMeta.element("de[@tag='00540016']");
+			if (rp!=null) {
+				String[] t = {cid};
+				return t;			
+			}
+		}
+		
+		
+		// Bummer
+		System.out.println("No PET DataSet has the meta-data element [0054,0016] under study " + studyCID);
+		String[] t = {studyCID, "No PET DataSet has the meta-data element [0054,0016] under study " + studyCID};
+		return t;
 	}
 
 	private String findCTDataSet (ServiceExecutor executor, String cid) throws Throwable {
@@ -352,7 +380,15 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String petScanTimeDICOM = null;
 		if (petDataSetCID!=null) { 
 			if (dbg) System.out.println("   petDataSetCID = " + petDataSetCID);
+			if (petDICOMMeta==null) {
+				System.out.println("PET DICOM meta-data null for " + petDataSetCID);
+				return "PET DICOM meta-data null for " + petDataSetCID;
+			}
 			XmlDoc.Element rp = petDICOMMeta.element("de[@tag='00540016']");
+			if (rp==null) {
+				System.out.println("PET DICOM meta-data element [0054,0016] is null for " + petDataSetCID);
+				return "PET DICOM meta-data element [0054,0016] is null for " + petDataSetCID;
+			}
 			XmlDoc.Element rp2 = rp.element("de[@tag='FFFEE000']");
 			//
 			String doseDICOM = rp2.value("de[@tag='00181074']/value");
@@ -373,6 +409,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String ctScanTimeDICOM = null;
 		if (ctDataSetCID!=null) {
 			if (dbg) System.out.println("   ctDataSetCID = " + ctDataSetCID);
+			if (ctDICOMMeta==null) {
+				System.out.println("CT DICOM meta-data null for " + ctDataSetCID);
+				return "CT DICOM meta-data null for " + ctDataSetCID;
+			}
 			// Acquisition Time
 			ctScanTimeDICOM = ctDICOMMeta.value("de[@tag='00080032']/value");
 			if (dbg) System.out.println("      CT DICOM Scan time = " + ctScanTimeDICOM);
