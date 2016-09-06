@@ -128,13 +128,15 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String petDataSetCID = null;
 		if (!petIsChecked) {
 			String[] t =  findPETDataSet (executor(), studyCID);
-			if (t.length==2) {
-				// No good PET data sets found
-				System.out.println(t[1]);
-				send (executor(), email, t[1]);
-				return;				
+			if (t!=null) {
+    			if (t.length==2) {
+    				// No good PET data sets found
+    				System.out.println(t[1]);
+    				send (executor(), email, t[1]);
+    				return;				
+    			}
+    			petDataSetCID =t[0];
 			}
-			petDataSetCID =t[0];
 		}
 
 		// Now find the CT DataSet that we want under the parent Study
@@ -306,7 +308,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String query = "(cid='" + studyCID + "' or cid starts with '" + studyCID + "') and model='om.pssd.dataset' and xpath(mf-dicom-series/modality)='PT'";
 		dm.add("where", query);
 		XmlDoc.Element r = executor().execute("asset.query", dm.root());
-		if (r==null||!r.elementExists("cid")) return new String[]{studyCID, "No PET dataset is found in study " + studyCID};
+		if (r==null||!r.elementExists("cid")) return null;
 
 		// We need a PET data set with the required DICOM meta-data element
 		Collection<String> cids = r.values("cid");
@@ -426,19 +428,21 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 		// Is this the special 'blood pool' PET DataSet.  It is guarenteed that the string '1_9' will
 		// be found in the blood pool DataSet.  That's not very robust is it Rob !
-		String studyDescription = petDICOMMeta.value("de[@tag='00081030']/value");
+		String studyDescription = petDICOMMeta==null? null : petDICOMMeta.value("de[@tag='00081030']/value");
 		
 		
 		// Algorithm  changed from .contains("1_9") to the current one as below.
 		// This changed on 07-Jan-2016 as blood pool scans are currently
 		// not being done and the use of the string PERF at the end only
 		// for future scans is slightly more robust.
-		String s[] = studyDescription.split("_"); 
-		int n = s.length;
-		String s2 = s[n-1];
 		Boolean isBloodPool = false;
-		if (s2!=null && s2.contains("1_PERF")) isBloodPool = true;
-		if (dbg) System.out.println("   DICOM isBloodPool = " + isBloodPool);
+		if(studyDescription!=null){
+    		String s[] = studyDescription.split("_"); 
+    		int n = s.length;
+    		String s2 = s[n-1];
+    		if (s2!=null && s2.contains("1_PERF")) isBloodPool = true;
+    		if (dbg) System.out.println("   DICOM isBloodPool = " + isBloodPool);
+		}
 
 		// Iterate over the FMP PET Visits
 		petVisits.beforeFirst();
