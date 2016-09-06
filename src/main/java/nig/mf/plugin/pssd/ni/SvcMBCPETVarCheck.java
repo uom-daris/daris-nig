@@ -306,7 +306,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String query = "(cid='" + studyCID + "' or cid starts with '" + studyCID + "') and model='om.pssd.dataset' and xpath(mf-dicom-series/modality)='PT'";
 		dm.add("where", query);
 		XmlDoc.Element r = executor().execute("asset.query", dm.root());
-		if (r==null||!r.elementExists("cid")) return null;
+		if (r==null||!r.elementExists("cid")) return new String[]{studyCID, "No PET dataset is found in study " + studyCID};
 
 		// We need a PET data set with the required DICOM meta-data element
 		Collection<String> cids = r.values("cid");
