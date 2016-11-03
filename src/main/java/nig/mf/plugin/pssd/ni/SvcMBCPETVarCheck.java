@@ -36,7 +36,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 				"cid",
 				CiteableIdType.DEFAULT,
 				"The identity of the parent Study.  All child DataSets (and in a federation children will be found on all peers in the federsation) containing DICOM data will be found and sent.",
-				0, Integer.MAX_VALUE);
+				0, 1);
 
 		_defn.add(me);
 		//
@@ -347,7 +347,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 	}
 
 
-	private void send (ServiceExecutor executor, String email,  String body) throws Throwable {
+	static public void send (ServiceExecutor executor, String email,  String body) throws Throwable {
 		// Send email if errors were found
 		if (body!=null) {
 			String subject = "Errors found comparing PET DICOM meta-data with FileMakerPro data base entries";
@@ -359,7 +359,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 			executor.execute("mail.send", dm.root());
 		}
 	}
-	private int numberVisits (ResultSet rs) throws Throwable {
+	static public int numberVisits (ResultSet rs) throws Throwable {
 		if (rs==null) return 0;
 		int n = 0;
 		rs.beforeFirst();

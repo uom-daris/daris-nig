@@ -48,6 +48,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		// archive
 		// _svs.add(new SvcMBCSeriesSourceSet()); // One shot
 		_svs.add(new SvcMBCPETVarCheck());
+		_svs.add(new SvcMBCDoseUpload());
 
 		// Test service
 		_svs.add(new SvcTesting());

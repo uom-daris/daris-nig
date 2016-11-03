@@ -99,6 +99,8 @@ grantRolePerms nig.pssd.administrator  \
       { service nig.pssd.dataset.meta.copy ADMINISTER } \
       { service nig.pssd.project.migrate ADMINISTER } \
       { service nig.pssd.project.name.check ADMINISTER } \
+      { service nig.pssd.mbic.petvar.check ADMINISTER } \
+      { service nig.pssd.mbic.dose.upload ADMINISTER } \
       { service nig.test ADMINISTER } \
     }
 # Retired
