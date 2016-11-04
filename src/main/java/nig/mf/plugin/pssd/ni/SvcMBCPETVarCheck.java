@@ -25,7 +25,6 @@ public class SvcMBCPETVarCheck extends PluginService {
 	// Relative location of resource file on server
 	private static final String FMP_CRED_REL_PATH = "/.fmp/petct_fmpcheck";
 	private static final String EMAIL = "williamsr@unimelb.edu.au";
-	//private static final String EMAIL = "nkilleen@unimelb.edu.au";
 
 	private Interface _defn;
 
@@ -48,14 +47,12 @@ public class SvcMBCPETVarCheck extends PluginService {
 				0, 1);
 		_defn.add(me);
 		//
-		me = new Interface.Element("debug", BooleanType.DEFAULT, "Add some print diagnostics to the mediaflux server log Default is false.",
+		me = new Interface.Element("force", BooleanType.DEFAULT, "Over-ride the meta-data on the Study indicating that this Study has already been checked, and check regardless. Defaults to false.",
 				0, 1);
 		_defn.add(me);
-		//
-		me = new Interface.Element("force", BooleanType.DEFAULT, "Over-ride the meta-data on the Study indicating that this Study has alreayd been checked, and chedk regardless. Defaults to false.",
+		me = new Interface.Element("update", BooleanType.DEFAULT, "Actually update FMP with the new values. Defaults to false.",
 				0, 1);
 		_defn.add(me);
-
 	}
 
 	@Override
@@ -92,10 +89,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 		// Parse input ID
 		Boolean force = args.booleanValue("force", false);
-		Boolean dbg = args.booleanValue("debug", false);
 		String studyID = args.value("id");
 		String studyCID = args.value("cid");
 		String email = args.stringValue("email", EMAIL);
+		Boolean update = args.booleanValue("update", false);
 		if (studyID!=null && studyCID!=null) {
 			throw new Exception ("Can't supply 'id' and 'cid'");
 		}
@@ -103,6 +100,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 			throw new Exception ("Must supply 'id' or 'cid'");
 		}
 		if (studyCID==null) studyCID = CiteableIdUtil.idToCid(executor(), studyID);
+		w.add("study-CID", studyCID);
 
 		// Get the parent
 		XmlDoc.Element studyMeta = AssetUtil.getAsset(executor(), studyCID, null);
@@ -129,13 +127,13 @@ public class SvcMBCPETVarCheck extends PluginService {
 		if (!petIsChecked) {
 			String[] t =  findPETDataSet (executor(), studyCID);
 			if (t!=null) {
-    			if (t.length==2) {
-    				// No good PET data sets found
-    				System.out.println(t[1]);
-    				send (executor(), email, t[1]);
-    				return;				
-    			}
-    			petDataSetCID =t[0];
+				if (t.length==2) {
+					// No good PET data sets found
+					System.out.println(t[1]);
+					send (executor(), email, t[1]);
+					return;				
+				}
+				petDataSetCID =t[0];
 			}
 		}
 
@@ -143,7 +141,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String ctDataSetCID = null;
 		if (!ctIsChecked) ctDataSetCID = findCTDataSet(executor(), studyCID);
 
-		// Return if nothing found
+		// Return if nothing found (could be a raw study)
 		if (petDataSetCID==null && ctDataSetCID==null) {
 			return;
 		}
@@ -201,10 +199,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 		DICOMPatient dp = new DICOMPatient(dicomPatient);
 		String mbcPatientID = dp.getID();
 		String patientName = dp.getFullName();
+		w.add("MBC-patient-id", mbcPatientID);
 
 
 		// Find PET visits in FMP for this patient and date.
-		// There may be one (usual) or two (the 'blood sample' which always comes first)
 		ResultSet petVisits = null;
 		try {
 			//
@@ -218,20 +216,49 @@ public class SvcMBCPETVarCheck extends PluginService {
 			return;
 		}
 
-		// Check there are only one or two visits found in FMP
+		// Check there is at least one visit
 		int n = numberVisits (petVisits);
+		w.add("date", date);
+		w.add("FMP-number-visits", n);
 		// System.out.println("Number visits = " + n);
-		if (n!=1 && n!=2) {
-			String error = "For DataSet '" + petDataSetCID + "' found " + n + " PET visits (expecting 1 or 2) in FMP for patient " +
+		if (n==0) {
+			String error = "For DataSet '" + petDataSetCID + "' found no PET visits  in FMP for patient " +
 					patientName + "(MBCID=" + mbcPatientID + ") and date " + date.toString() + "\n";
 			send (executor(), email, error);
 			mbc.closeConnection();
 			return;
 		}
 
+		// Find the first visit for which the DaRIS CID does not represent a study.
+		// ROb inserts the Subject CID in FMP and this service updates it to the actual Study
+
+		int[] status  = findVisit (studyCID, petVisits);
+		System.out.println("status = " + status[0] + " : " + status[1]);
+		int visitIdx = -1;
+		if (status[0]==-1 && status[1]==-1) {
+			String error = "For DataSet '" + petDataSetCID + "' the algorithm to find the visit has failed";
+			send (executor(), email, error);
+			mbc.closeConnection();
+			return;
+		} else {
+			if (status[0]==0) {
+				// We did find a visit with a SUbject only CID
+				w.add("FMP-visit-index", new String[]{"Study-CID-does-not-pre-exist", studyCID}, status[1]);
+			} else if (status[0]==1) {
+				// We did not find a Visit with a Subject CID only, but we did
+				// find a visit for which this Study CID was already set
+				// That should just mean we are redoing the same one already done
+				w.add("FMP-visit-index", new String[]{"Study-CID-pre-exists", studyCID}, status[1]);
+				mbc.closeConnection();
+				return;		
+			}
+		}
+
+
 		// Compare DICOM with FMP values
-		String diff = compareSetValues (executor(), dbg, studyCID, mbc, date, petDICOMMeta, ctDICOMMeta, petVisits, patientName, mbcPatientID, 
-				petDataSetCID, ctDataSetCID);
+		visitIdx = status[1];
+		String diff = compareAndSetValues (executor(), update, visitIdx, studyCID, mbc, date, petDICOMMeta, ctDICOMMeta, petVisits, patientName, mbcPatientID, 
+				petDataSetCID, ctDataSetCID, w);
 
 		// Populate email if errors found
 		if (diff!=null) {
@@ -243,6 +270,55 @@ public class SvcMBCPETVarCheck extends PluginService {
 		mbc.closeConnection();
 	}
 
+
+	/**
+	 * FInd the index of the first visit for which the DaRIS ID 
+	 * has a depth less than for a Study. ROb enters a SUbject CID
+	 * into FMP.  This is subsequently overwritten by this service
+	 * with the actual Study CID
+	 * 
+	 * @param rs
+	 * @return status
+	 *    [0] 1 if a visit with the Study CID is already set
+	 *    [0] 0 if a visit is found where the CID has depth less than a STudy (usually a SUbject)
+	 *    [0] -1 something is wrong
+	 *    [1] The visit index found
+	 *    [1] -1 something is wrong
+	 * @throws Throwable
+	 */
+	private int[] findVisit (String studyCID, ResultSet rs) throws Throwable {
+		int[] status = new int[2];
+		status[0] = 0;
+		status[1] = 0;
+		rs.beforeFirst();
+		int idx = 0;
+		int idxFound = -1;
+		while (rs.next()) {
+			String id = rs.getString("DARIS_ID");
+			String scanType = rs.getString("Scan_Type");
+
+			// We note if this CID is already in place. If it is, we are
+			// redoing one already done.
+			if (studyCID.equals(id)) {
+				status[0] = 1;
+				status[1] = idx;
+				return status;
+			}
+			//
+			int d = nig.mf.pssd.CiteableIdUtil.getIdDepth(id);
+			int sd = CiteableIdUtil.studyDepth();
+			if (d<sd) {
+				status[0] = 0;
+				status[1] = idx;
+				return status;
+			}
+			idx++;
+		}
+		// shouldn't get here
+		status[0] = -1;
+		status[1] = -1;
+		return status;
+	}
 
 	private Boolean checked (ServiceExecutor executor, Boolean isPET, XmlDoc.Element studyMeta) throws Throwable {
 
@@ -320,8 +396,8 @@ public class SvcMBCPETVarCheck extends PluginService {
 				return t;			
 			}
 		}
-		
-		
+
+
 		// Bummer
 		System.out.println("No PET DataSet has the meta-data element [0054,0016] under study " + studyCID);
 		String[] t = {studyCID, "No PET DataSet has the meta-data element [0054,0016] under study " + studyCID};
@@ -370,25 +446,26 @@ public class SvcMBCPETVarCheck extends PluginService {
 	}
 
 
-	private String compareSetValues (ServiceExecutor executor, Boolean dbg, String studyCID, MBCFMP mbc, Date date, XmlDoc.Element petDICOMMeta, XmlDoc.Element ctDICOMMeta, 
-			ResultSet petVisits, String patientName, String mbcPatientID, String petDataSetCID, String ctDataSetCID) throws Throwable {
+	private String compareAndSetValues (ServiceExecutor executor, Boolean update, int visitIdx, String studyCID, MBCFMP mbc, Date date, XmlDoc.Element petDICOMMeta, XmlDoc.Element ctDICOMMeta, 
+			ResultSet petVisits, String patientName, String mbcPatientID, String petDataSetCID, String ctDataSetCID, XmlWriter w) throws Throwable {
 
-		if (dbg) System.out.println("Enter SvcMBCPETVarCheck:compareSetValues");
 
 		// Fetch Values from PET DICOM if available
 		String doseDICOMFormatted = null;
 		String startInjectionTimeDICOM = null;
 		String startInjectionTimeDICOM2 = null;
 		String petScanTimeDICOM = null;
+		w.push("DICOM");
 		if (petDataSetCID!=null) { 
-			if (dbg) System.out.println("   petDataSetCID = " + petDataSetCID);
+			w.push("PET");
+			w.add("dataset-CID", petDataSetCID);
 			if (petDICOMMeta==null) {
-				System.out.println("PET DICOM meta-data null for " + petDataSetCID);
+				w.add("dicom-meta", "null");
 				return "PET DICOM meta-data null for " + petDataSetCID;
 			}
 			XmlDoc.Element rp = petDICOMMeta.element("de[@tag='00540016']");
 			if (rp==null) {
-				System.out.println("PET DICOM meta-data element [0054,0016] is null for " + petDataSetCID);
+				w.add("[0054,0016]", "null");
 				return "PET DICOM meta-data element [0054,0016] is null for " + petDataSetCID;
 			}
 			XmlDoc.Element rp2 = rp.element("de[@tag='FFFEE000']");
@@ -396,29 +473,33 @@ public class SvcMBCPETVarCheck extends PluginService {
 			String doseDICOM = rp2.value("de[@tag='00181074']/value");
 			Float f = Float.parseFloat(doseDICOM) / 1000000.0f;
 			doseDICOMFormatted = String.format("%.1f%n", f).trim();
-			if (dbg) System.out.println("      DICOM dose = " + doseDICOM);
+			w.add("dose", doseDICOM);
 			//
 			startInjectionTimeDICOM = rp2.value("de[@tag='00181072']/value");
 			startInjectionTimeDICOM2 = startInjectionTimeDICOM.substring(0,4);    // Rob enters just hh:mm in FMP
-			if (dbg) System.out.println("      DICOM injection time = " + startInjectionTimeDICOM2);
+			w.add("injection-time", startInjectionTimeDICOM2);
 			// Acquisition Time
 			petScanTimeDICOM = petDICOMMeta.value("de[@tag='00080032']/value");
-			if (dbg) System.out.println("      PET DICOM Scan time = " + petScanTimeDICOM);
+			w.add("scan-time", petScanTimeDICOM);
+			w.pop();
 		}
 
 
 		// Fetch values from CT DICOM header if available
 		String ctScanTimeDICOM = null;
 		if (ctDataSetCID!=null) {
-			if (dbg) System.out.println("   ctDataSetCID = " + ctDataSetCID);
+			w.push("CT");
+			w.add("dataset-CID", ctDataSetCID);
 			if (ctDICOMMeta==null) {
-				System.out.println("CT DICOM meta-data null for " + ctDataSetCID);
+				w.add("dicom-meta", "null");
 				return "CT DICOM meta-data null for " + ctDataSetCID;
 			}
 			// Acquisition Time
 			ctScanTimeDICOM = ctDICOMMeta.value("de[@tag='00080032']/value");
-			if (dbg) System.out.println("      CT DICOM Scan time = " + ctScanTimeDICOM);
+			w.add("scan-time", ctScanTimeDICOM);
+			w.pop();
 		}
+		w.pop();
 
 		// Prepare
 		Boolean matchedDose = false;
@@ -426,59 +507,31 @@ public class SvcMBCPETVarCheck extends PluginService {
 		Vector<String> fmpInjectionTimes = new Vector<String>();
 		Vector<String> fmpDoses = new Vector<String>();
 
-		// Is this the special 'blood pool' PET DataSet.  It is guarenteed that the string '1_9' will
-		// be found in the blood pool DataSet.  That's not very robust is it Rob !
-		String studyDescription = petDICOMMeta==null? null : petDICOMMeta.value("de[@tag='00081030']/value");
-		
-		
-		// Algorithm  changed from .contains("1_9") to the current one as below.
-		// This changed on 07-Jan-2016 as blood pool scans are currently
-		// not being done and the use of the string PERF at the end only
-		// for future scans is slightly more robust.
-		Boolean isBloodPool = false;
-		if(studyDescription!=null){
-    		String s[] = studyDescription.split("_"); 
-    		int n = s.length;
-    		String s2 = s[n-1];
-    		if (s2!=null && s2.contains("1_PERF")) isBloodPool = true;
-    		if (dbg) System.out.println("   DICOM isBloodPool = " + isBloodPool);
-		}
-
 		// Iterate over the FMP PET Visits
 		petVisits.beforeFirst();
 		int iVisit = 0;
 		while (petVisits.next()) {
+			if (iVisit==visitIdx) {
+				w.add("visit-index", iVisit);
 
-			// Fetch FMP values
-			if (dbg) System.out.println ("   PET VIsit " + iVisit++);
-			String doseFMP = petVisits.getString("injected_activity");
-			String startInjectionTimeFMP = petVisits.getString("Injection Time");
-			String scanTypeFMP = petVisits.getString("Scan_Type");
-
-			if (dbg) {
-				System.out.println("      Patient ID '" + mbcPatientID + "'");
-				System.out.println("      Scan Type '" + scanTypeFMP + "'");
-				System.out.println("      FMP dose '" + doseFMP + "'");
-				System.out.println("      FMP injection time '" + startInjectionTimeFMP + "'");
-			}
-
-			// Compare the right DICOM values with the right PET Visit (first visit [blood pool] 
-			// or second visit [normal]). Each Study we handle is either for the blood pool visit or not
-			if (  (scanTypeFMP.contains("EARLY") && isBloodPool) ||
-					(!scanTypeFMP.contains("EARLY") && !isBloodPool) ) {
+				// Fetch FMP values				
+				w.push("FMP");
+				String doseFMP = petVisits.getString("injected_activity");
+				String startInjectionTimeFMP = petVisits.getString("Injection Time");
+				String scanTypeFMP = petVisits.getString("Scan_Type");
+				w.add("scan-type", scanTypeFMP);
+				w.add("dose", doseFMP);
+				w.add("injection-time", startInjectionTimeFMP);
+				w.pop();
 
 				// Compare Injection start time. Compare or insert if missing
 				if (petDataSetCID!=null) {
-					if (dbg) {
-						System.out.println("      petDataSetCID = " + petDataSetCID);
-					}
 					if (!startInjectionTimeFMP.isEmpty()) {
 						String[] t = startInjectionTimeFMP.split(":");
 						if (t.length!=3) {
 							fmpInjectionTimes.add(startInjectionTimeFMP);
 						} else {
 							String t2 = t[0] + t[1];   // Rob only enters hh:mm
-							if (dbg) System.out.println("         Start times DICOM and FMP : " + startInjectionTimeDICOM2 + " " + t2);
 							if (!startInjectionTimeDICOM2.equals(t2)) {
 								fmpInjectionTimes.add(startInjectionTimeFMP.substring(0,5));
 							} else {
@@ -486,13 +539,13 @@ public class SvcMBCPETVarCheck extends PluginService {
 							}
 						} 
 					}
+					w.add("injection-time-matched", matchedInjectionTime);
 
 
 					// Compare dose
 					if (!doseFMP.isEmpty()) {
 						Float f2 = Float.parseFloat(doseFMP);
 						String f2s = String.format("%.1f%n", f2).trim();
-						if (dbg) System.out.println("         Doses DICOM and FMP : " +doseDICOMFormatted + " " + f2s);
 						//		s2 = "380.0";
 						if (!doseDICOMFormatted.equals(f2s)) {
 							fmpDoses.add(f2s);
@@ -500,56 +553,51 @@ public class SvcMBCPETVarCheck extends PluginService {
 							matchedDose = true;
 						}
 					}
+					w.add("dose-matched", matchedDose);
 
 
 					// Insert PET scan time from DICOM (hh:mm:ss) which is primary
 					String t2 = petScanTimeDICOM.substring(0,2) + ":" + 
 							petScanTimeDICOM.substring(2,4) + ":" +
 							petScanTimeDICOM.substring(4,6);
-					if (dbg) {
-						System.out.println("         Inserting PET scan start time " + t2 + " into FMP");
+					if (update) {
+						w.add("DICOM-PET-scan-time-inserted-into-FMP", t2);
+						mbc.updateScanTime (mbcPatientID, date, scanTypeFMP, t2, true, false);
 					}
-					mbc.updateScanTime (mbcPatientID, date, scanTypeFMP, t2, true, dbg);
-					
+
 					// Insert DaRIS ID into FMP
-					if (dbg) {
-						System.out.println("         Inserting PET DataSet DaRIS ID " + petDataSetCID + " into FMP");
+					if (update) {
+						w.add("Study-CID-inserted-into-FMP", studyCID);
+						mbc.updateDaRISID (mbcPatientID, date, scanTypeFMP, studyCID, false);
 					}
-					mbc.updateDaRISID (mbcPatientID, date, scanTypeFMP, studyCID, dbg);
 
 					// Update the parent Study meta-data saying it's been checked for PET
-					setStudyMetaData (executor, studyCID, true);
+					if (update) setStudyMetaData (executor, studyCID, true);
 				}
 
 				// Insert CT scan time from DICOM (hh:mm:ss) which is primary
 				if (ctDataSetCID!=null) {
-					if (dbg) {
-						System.out.println("      ctDataSetCID = " + ctDataSetCID);
-					}
 					String t2 = ctScanTimeDICOM.substring(0,2) + ":" + 
 							ctScanTimeDICOM.substring(2,4) + ":" +
 							ctScanTimeDICOM.substring(4,6);
 
-					if (dbg) {
-						System.out.println("      Inserting CT scan start time " + t2 + " into FMP");
+					if (update) {
+						w.add("DICOM-CT-scan-time-inserted-into-FMP", t2);
+						mbc.updateScanTime (mbcPatientID, date, scanTypeFMP, t2, false, false);
+						mbc.updateDaRISID (mbcPatientID, date, scanTypeFMP, studyCID, false);
 					}
-					mbc.updateScanTime (mbcPatientID, date, scanTypeFMP, t2, false, dbg);
-
-					if (dbg) {
-						System.out.println("      Inserting CT DataSet DaRIS ID " + ctDataSetCID + " into FMP");
-					}
-					mbc.updateDaRISID (mbcPatientID, date, scanTypeFMP, studyCID, dbg);
-
 					// Update the parent Study meta-data saying it's been checked for CT
-					setStudyMetaData (executor, studyCID, false);
+					if (update) setStudyMetaData (executor, studyCID, false);
 				}
 			}
+			iVisit++;
 		}
 
 
 		// Report inconsistencies 
 		String error = "";
 		Boolean err = false;
+		w.push("errors");
 		if (petDataSetCID!=null) {
 			if (!matchedInjectionTime) {
 				String t = formatVector(fmpInjectionTimes);
@@ -560,6 +608,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 						t2 + " ) and FMP " + t + " injection start times do not agree " +
 						" (DataSet='" + petDataSetCID + "')";	
 				err = true;
+				w.add("injection-time", error);
 			}
 
 			if (!matchedDose) {
@@ -569,8 +618,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 						doseDICOMFormatted + ") and FMP  " + t + " dose values do not agree " +
 						" (DataSet='" + petDataSetCID + "')";	
 				err = true;
+				w.add("dose", error);
 			}
 		}
+		w.pop();
 
 		if (err) {
 			//System.out.println(error);

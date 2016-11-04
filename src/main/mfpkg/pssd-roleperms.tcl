@@ -101,6 +101,7 @@ grantRolePerms nig.pssd.administrator  \
       { service nig.pssd.project.name.check ADMINISTER } \
       { service nig.pssd.mbic.petvar.check ADMINISTER } \
       { service nig.pssd.mbic.dose.upload ADMINISTER } \
+      { service nig.pssd.mbic.fmp.uploads ADMINISTER } \
       { service nig.test ADMINISTER } \
     }
 # Retired

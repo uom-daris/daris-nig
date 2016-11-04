@@ -4,17 +4,13 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.Vector;
 
 import mbc.FMP.MBCFMP;
-import nig.mf.dicom.plugin.util.DICOMModelUtil;
-import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.util.AssetUtil;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
 import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.ServiceExecutor;
-import arc.mf.plugin.PluginService.Interface;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
@@ -36,7 +32,7 @@ public class SvcMBCDoseUpload extends PluginService {
 
 		_defn = new Interface();
 		//
-		
+
 		Interface.Element me = new Interface.Element(
 				"cid",
 				CiteableIdType.DEFAULT,
@@ -53,11 +49,11 @@ public class SvcMBCDoseUpload extends PluginService {
 				0, 1);
 		_defn.add(me);
 		//
-		me = new Interface.Element("debug", BooleanType.DEFAULT, "Add some print diagnostics to the mediaflux server log Default is false.",
+		me = new Interface.Element("update", BooleanType.DEFAULT, "Actually update FMP with the new values. Defaults to false.",
 				0, 1);
 		_defn.add(me);
 		//
-		me = new Interface.Element("update", BooleanType.DEFAULT, "Actually update FMP with the new values. Defaults to false.",
+		me = new Interface.Element("force", BooleanType.DEFAULT, "Over-ride the meta-data on the Study indicating that this Study has already been checked, and check regardless. Defaults to false.",
 				0, 1);
 		_defn.add(me);
 
@@ -97,31 +93,49 @@ public class SvcMBCDoseUpload extends PluginService {
 
 		// Parse input ID
 		Boolean updateFMP = args.booleanValue("update", false);
-		Boolean dbg = args.booleanValue("debug", false);
 		String studyCID = args.value("cid");
 		String studyID = args.value("id");
 		String email = args.stringValue("email", EMAIL);
-		
+		Boolean force = args.booleanValue("force", false);
+
+		//
+		int findMethod = 0;       // Find by first Visit in FMP with DaRIS ID matching the Study
+
+
 		// Check	
 		if (studyID==null && studyCID==null) {
 			throw new Exception ("Must supply 'id' or 'cid'");
 		}
 		if (studyCID==null) studyCID = CiteableIdUtil.idToCid(executor(), studyID);
+		
+		// Have we already processed the SR DataSet for this Study
+		XmlDoc.Element studyMeta = AssetUtil.getAsset(executor(), studyCID, null);
+		Boolean isProcessed = checked(executor(),studyMeta);
+		if (force) isProcessed = false;
+		if (isProcessed) return;
 
 
+		// Do it
 		try {
-			update (executor(), updateFMP, dbg, studyCID,  w);
+			update (executor(), updateFMP, studyCID,  findMethod, w);
+				
+			// Indicate we have processed this study successfully
+			if (updateFMP) {
+				w.add("update-study-meta", true);
+				setStudyMetaData(executor(), studyCID);
+			}
 		} catch (Throwable t) {
 			String error = "nig.dicom.mbic.dose.upload : For Study '" + studyCID + 
 					"' an error occured extracting (from DICOM) or setting (in FMP) the dose meta-data : " + t.getMessage();
 			SvcMBCPETVarCheck.send (executor(), email, error);
 		}
-
+	
 	}
 
-	private void update (ServiceExecutor executor, Boolean updateFMP, Boolean dbg, String studyCID, XmlWriter w) throws Throwable {
-		
-		// FInd SR DataSet. Nothinbg to do if none.
+	private void update (ServiceExecutor executor, Boolean updateFMP, String studyCID, 
+			int findMethod, XmlWriter w) throws Throwable {
+
+		// FInd SR DataSet. Nothing to do if none.
 		String srCID = findSR (executor, studyCID);
 		if (srCID==null) return;
 
@@ -165,7 +179,7 @@ public class SvcMBCDoseUpload extends PluginService {
 
 		// Poke stuff in FMP
 		try {
-		updateFMP (mbc, dicomMeta, doseReport, updateFMP, dbg, w);
+			updateFMP (findMethod, studyCID, mbc, dicomMeta, doseReport, updateFMP, w);
 		} catch (Throwable t) {
 			mbc.closeConnection();
 			throw new Exception (t);
@@ -191,17 +205,18 @@ public class SvcMBCDoseUpload extends PluginService {
 		}
 		String id = r.value("id");
 		return CiteableIdUtil.idToCid(executor, id);
-		
+
 	}
-	
-	private void updateFMP (MBCFMP mbc, XmlDoc.Element dicomMeta, XmlDoc.Element doseReport, Boolean update, Boolean dbg, XmlWriter w) throws Throwable {
+
+	private void updateFMP (int findMethod, String studyCID, MBCFMP mbc, XmlDoc.Element dicomMeta, XmlDoc.Element doseReport,
+			Boolean update, XmlWriter w) throws Throwable {
 
 		// FInd the patient ID and study date from DICOM
 		String mbcPatientID = getDicomValue (dicomMeta,  "00100020");
 		if (mbcPatientID==null) {
 			throw new Exception ("The patient ID is null in the DICOM meta-data");
 		}
-		w.add("patient-id", mbcPatientID);
+		w.add("MBC-patient-id", mbcPatientID);
 
 		// Find the date
 		String sdate = getDicomValue (dicomMeta, "00080021");
@@ -296,27 +311,63 @@ public class SvcMBCDoseUpload extends PluginService {
 		int nVisits = SvcMBCPETVarCheck.numberVisits (petVisits);
 		w.add("n-pet-visits", nVisits);
 
+		// FInd the visit we want according to the desired find method
+		int visitIdx = findVisit (petVisits, studyCID, findMethod);
+		if (visitIdx==-1) {
+			throw new Exception ("Failed to find the correct Visit in FMP for this Study");
+		}
+		w.add("FMP-visit-index", visitIdx);
+
 		// Iterate through PET visits
 		petVisits.beforeFirst();
 		int iVisit = 0;
 		while (petVisits.next()) {
-			// Get what's in FMP
-			String fmpCTDoseLengthProductTotal = petVisits.getString("DLPmGycmCT2");
-			String fmpXRayModulationType = petVisits.getString("XRayModulationType");
-			String fmpDLP = petVisits.getString("DLPmGycmCT");
-			String fmpkVp = petVisits.getString("kVp");
-			String fmpXRayCurrent = petVisits.getString("ReferencemAs");
-			w.push("FMP");
-			w.add("doseLengthProductTotal", fmpCTDoseLengthProductTotal);
-			w.add("XRayModulationType", fmpXRayModulationType);
-			w.add("DLP", fmpDLP);
-			w.add("kVP", fmpkVp);
-			w.add("current", fmpXRayCurrent);
-			w.pop();
-			//
-			// Update the dose fields in FMP
-			if (update) mbc.updateDose (mbcPatientID, date, doseLengthProductTotal, XRayModType, ""+dlp, kVp, current, dbg);
+			if (iVisit==visitIdx) {
+				// Get what's in FMP
+				String fmpCTDoseLengthProductTotal = petVisits.getString("DLPmGycmCT2");
+				String fmpXRayModulationType = petVisits.getString("XRayModulationType");
+				String fmpDLP = petVisits.getString("DLPmGycmCT");
+				String fmpkVp = petVisits.getString("kVp");
+				String fmpXRayCurrent = petVisits.getString("ReferencemAs");
+				w.push("FMP");
+				w.add("doseLengthProductTotal", fmpCTDoseLengthProductTotal);
+				w.add("XRayModulationType", fmpXRayModulationType);
+				w.add("DLP", fmpDLP);
+				w.add("kVP", fmpkVp);
+				w.add("current", fmpXRayCurrent);
+				w.pop();
+				//
+				// Update the dose fields in FMP
+				if (update) mbc.updateDose (mbcPatientID, date, doseLengthProductTotal, XRayModType, ""+dlp, kVp, current, false);
+			}
+			iVisit++;
 		}
+	}
+
+
+	/**
+	 * FInd the index of the first visit for which the DaRIS ID 
+	 * has a depth less than for a Study
+	 * 
+	 * @param rs
+	 * @param studyCID
+	 * @param findMethod 
+	 *     0 : look for the first Visit for which the DaRIS ID is the CID of the Study we are handling
+	 * @return -1 if not found
+	 * @throws Throwable
+	 */
+	private int findVisit (ResultSet rs, String studyCID, int findMethod) throws Throwable {
+		rs.beforeFirst();
+		int n = 0;
+		while (rs.next()) {
+			String id = rs.getString("DARIS_ID");
+			if (findMethod==0) {
+				if (id.equals(studyCID)) return n;
+			}
+			n++;
+		}
+		return -1;
+
 	}
 
 
@@ -379,4 +430,33 @@ public class SvcMBCDoseUpload extends PluginService {
 		Double value = Double.parseDouble(parts[0]);
 		return value;	
 	}
+
+
+	private Boolean checked (ServiceExecutor executor, XmlDoc.Element studyMeta) throws Throwable {
+
+		XmlDoc.Element meta = studyMeta.element("asset/meta/nig-daris:pssd-mbic-fmp-check");
+		if (meta==null) return false;
+
+		XmlDoc.Element t = meta.element("dose");
+		if (t==null) return false;
+		if (t.booleanValue()==true) return true;		
+
+		return false;
+	}
+	
+	
+	private void setStudyMetaData (ServiceExecutor executor, String studyCID) throws Throwable {
+
+
+		// Set meta-data on the Study indicating the PET or CT checking has been done
+		XmlDocMaker dm = new XmlDocMaker("args");
+		dm.add("id", studyCID);
+		dm.push("meta", new String[] {"action", "merge"});
+		dm.push("nig-daris:pssd-mbic-fmp-check");
+		dm.add("dose", true);
+		dm.pop();
+		dm.pop();
+		executor.execute("om.pssd.study.update", dm.root());
+	}
+
 }

@@ -10,10 +10,14 @@ asset.doc.type.update :create yes :type nig-daris:pssd-mbic-fmp-check \
   :definition < \
     :element -name "pet" -type "boolean" -min-occurs "0" -max-occurs "1" \
     < \
-      :description "Has a PET DataSet been checked." \
+      :description "Has a PET DataSet been checked (by nig.pssd.mbic.petvar.check)." \
     > \
     :element -name "ct" -type "boolean" -min-occurs "0" -max-occurs "1" \
     < \
-      :description "Has a CT DataSet been checked" \
+      :description "Has a CT DataSet been checked ((by nig.pssd.mbic.petvar.check). " \
+    > \
+   :element -name "dose" -type "boolean" -min-occurs "0" -max-occurs "1" \
+    < \
+      :description "Has the SR DataSet been processed (by nig.pssd.mbic.dose.upload). " \
     > \
    >
