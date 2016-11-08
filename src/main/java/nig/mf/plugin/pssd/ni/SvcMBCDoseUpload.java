@@ -410,8 +410,7 @@ public class SvcMBCDoseUpload extends PluginService {
     }
 
     /**
-     * FInd the index of the first visit for which the DaRIS ID has a depth less
-     * than for a Study
+     * FInd the index of the visit for which the DaRIS ID is equal to the Study CID
      * 
      * @param rs
      * @param studyCID
