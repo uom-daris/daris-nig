@@ -144,6 +144,10 @@ set dicom_ingest_service_perms { { service nig.pssd.subject.meta.set MODIFY } }
 #
 set domain_dicom_ingest_role      nig.pssd.dicom-ingest
 createRole     $domain_dicom_ingest_role
-actor.grant :name  $domain_dicom_ingest_role :type role :perm < :resource -type document:namespace nig-daris :access ACCESS >
+actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type document:namespace nig-daris :access ACCESS >
+
+# allow executing nig.pssd.mbic.petvar.check nig.pssd.mbic.dose.upload nig.pssd.mbic.fmp.uploads services
+actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type service nig.pssd.mbic.* :access ADMINISTER >
+
 grantRolePerms $domain_dicom_ingest_role $dicom_ingest_doc_perms
 grantRolePerms $domain_dicom_ingest_role $dicom_ingest_service_perms
