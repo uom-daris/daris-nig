@@ -411,6 +411,8 @@ public class SvcMBCDoseUpload extends PluginService {
 
     /**
      * FInd the index of the visit for which the DaRIS ID is equal to the Study CID
+     * Note that early version of SvcMBCPetVarCheck set the DataSet CID notr the Study
+     * so account for that
      * 
      * @param rs
      * @param studyCID
@@ -426,9 +428,21 @@ public class SvcMBCDoseUpload extends PluginService {
         int n = 0;
         while (rs.next()) {
             String id = rs.getString("DARIS_ID");
+            int d = nig.mf.pssd.CiteableIdUtil.getIdDepth(id);
+            int sd = CiteableIdUtil.studyDepth();
+            
+            // If we have a DataSet CID in FMP, find the Study CID (as that's
+            // what we are setting now)
+            String id2 = id;
+            if (d>sd) {
+            	id2 = nig.mf.pssd.CiteableIdUtil.getStudyId(id);
+            }
+
             if (findMethod == 0) {
-                if (id.equals(studyCID))
+                if (id2.equals(studyCID))
                     return n;
+            } else {
+            	throw new Exception ("Unhandled visit find method");
             }
             n++;
         }
