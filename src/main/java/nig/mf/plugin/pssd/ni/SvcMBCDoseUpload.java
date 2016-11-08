@@ -161,8 +161,9 @@ public class SvcMBCDoseUpload extends PluginService {
 
         // FInd SR DataSet. Nothing to do if none.
         String srCID = findSR(executor, studyCID);
-        if (srCID == null)
+        if (srCID == null) {
             return;
+        }
 
         // CHeck Series type
         XmlDoc.Element seriesMeta = AssetUtil.getAsset(executor(), srCID, null);
@@ -236,8 +237,9 @@ public class SvcMBCDoseUpload extends PluginService {
             return null;
 
         Collection<String> ids = r.values("id");
-        if (ids.size() == 0)
+        if (ids == null || ids.isEmpty()) {
             return null;
+        }
         if (ids.size() > 1) {
             throw new Exception(
                     "Found " + ids.size() + " SR modality DataSets under Study "
@@ -245,7 +247,6 @@ public class SvcMBCDoseUpload extends PluginService {
         }
         String id = r.value("id");
         return CiteableIdUtil.idToCid(executor, id);
-
     }
 
     private void updateFMP(int findMethod, String studyCID, MBCFMP mbc,
