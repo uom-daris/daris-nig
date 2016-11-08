@@ -62,6 +62,8 @@ public class SvcMBCDoseUpload extends PluginService {
                 0, 1);
         _defn.add(me);
 
+        _defn.add(new Interface.Element("no-email", BooleanType.DEFAULT,
+                "Do not send email. Defaults to false.", 0, 1));
     }
 
     @Override
@@ -103,6 +105,10 @@ public class SvcMBCDoseUpload extends PluginService {
         String studyID = args.value("id");
         String email = args.stringValue("email", EMAIL);
         Boolean force = args.booleanValue("force", false);
+        boolean noEmail = args.booleanValue("no-email", false);
+        if (noEmail) {
+            email = null;
+        }
 
         //
         int findMethod = 0; // Find by first Visit in FMP with DaRIS ID matching
@@ -150,7 +156,9 @@ public class SvcMBCDoseUpload extends PluginService {
             sw.close();
 
             // send notification email with error message and stack trace
-            SvcMBCPETVarCheck.send(executor(), email, msg);
+            if (email != null) {
+                SvcMBCPETVarCheck.send(executor(), email, msg);
+            }
 
         }
 

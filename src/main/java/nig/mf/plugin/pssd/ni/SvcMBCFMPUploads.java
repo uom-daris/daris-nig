@@ -1,16 +1,6 @@
 package nig.mf.plugin.pssd.ni;
 
-import java.sql.ResultSet;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-
-import mbc.FMP.MBCFMP;
-import nig.mf.plugin.util.AssetUtil;
-import nig.mf.pssd.plugin.util.CiteableIdUtil;
-import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
-import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
@@ -56,6 +46,9 @@ public class SvcMBCFMPUploads extends PluginService {
 		me = new Interface.Element("force", BooleanType.DEFAULT, "Over-ride the meta-data on the Study indicating that this Study has already been checked, and check regardless. Defaults to false.",
 				0, 1);
 		_defn.add(me);
+		
+        _defn.add(new Interface.Element("no-email", BooleanType.DEFAULT,
+                "Do not send email. Defaults to false.", 0, 1));
 
 	}
 
@@ -97,7 +90,8 @@ public class SvcMBCFMPUploads extends PluginService {
 		String id = args.value("id");
 		String email = args.stringValue("email", EMAIL);
 		Boolean force = args.booleanValue("force", false);
-		
+        Boolean noEmail = args.booleanValue("no-email", null);
+        
 		// Do it
 		XmlDocMaker dm = new XmlDocMaker("args");
 		if (id!=null) dm.add("id", id);
@@ -105,6 +99,9 @@ public class SvcMBCFMPUploads extends PluginService {
 		dm.add("email", email);
 		dm.add("force", force);
 		dm.add("update", update);
+		if(noEmail!=null){
+		    dm.add("no-email", noEmail);
+		}
 		try {
 			// PET/CT variables first
 			w.push("nig.pssd.mbic.petvar.check");
