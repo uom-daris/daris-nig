@@ -147,7 +147,7 @@ createRole     $domain_dicom_ingest_role
 actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type document:namespace nig-daris :access ACCESS >
 
 # allow executing nig.pssd.mbic.petvar.check nig.pssd.mbic.dose.upload nig.pssd.mbic.fmp.uploads services
-actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type service nig.pssd.mbic.* :access ADMINISTER >
+actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type service nig.pssd.mbic.* :access * >
 
 grantRolePerms $domain_dicom_ingest_role $dicom_ingest_doc_perms
 grantRolePerms $domain_dicom_ingest_role $dicom_ingest_service_perms
