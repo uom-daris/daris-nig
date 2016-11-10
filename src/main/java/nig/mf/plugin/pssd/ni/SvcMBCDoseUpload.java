@@ -129,15 +129,32 @@ public class SvcMBCDoseUpload extends PluginService {
             isProcessed = false;
         if (isProcessed)
             return;
+ 
+        
+        // Open FMP database with credential in server side resource file
+        // holding
+        // <dbname>,<ip>,<user>,<encoded pw>
+        MBCFMP mbc = null;
+        try {
+            String t = System.getenv("HOME");
+            String path = t + FMP_CRED_REL_PATH;
+            mbc = new MBCFMP(path);
+        } catch (Throwable tt) {
+            throw new Exception(
+                    "Failed to establish JDBC connection to FileMakerPro");
+        }
+
 
         // Do it
         try {
-            update(executor(), updateFMP, studyCID, findMethod, w);
+            update(executor(), mbc, updateFMP, studyCID, findMethod, w);
 
             // Indicate we have processed this study successfully
             if (updateFMP) {
                 w.add("update-study-meta", true);
                 setStudyMetaData(executor(), studyCID);
+            } else {
+                w.add("update-study-meta", false);
             }
         } catch (Throwable t) {
             String error = "nig.dicom.mbic.dose.upload : For Study '" + studyCID
@@ -156,6 +173,7 @@ public class SvcMBCDoseUpload extends PluginService {
             sw.close();
 
             // send notification email with error message and stack trace
+            w.add("error", msg);
             if (email != null) {
                 SvcMBCPETVarCheck.send(executor(), email, msg);
             }
@@ -164,7 +182,7 @@ public class SvcMBCDoseUpload extends PluginService {
 
     }
 
-    private void update(ServiceExecutor executor, Boolean updateFMP,
+    private void update(ServiceExecutor executor,  MBCFMP mbc, Boolean updateFMP,
             String studyCID, int findMethod, XmlWriter w) throws Throwable {
 
         // FInd SR DataSet. Nothing to do if none.
@@ -208,20 +226,7 @@ public class SvcMBCDoseUpload extends PluginService {
                             + srCID);
         }
 
-        // Open FMP database with credential in server side resource file
-        // holding
-        // <dbname>,<ip>,<user>,<encoded pw>
-        MBCFMP mbc = null;
-        try {
-            String t = System.getenv("HOME");
-            String path = t + FMP_CRED_REL_PATH;
-            mbc = new MBCFMP(path);
-        } catch (Throwable tt) {
-            throw new Exception(
-                    "Failed to establish JDBC connection to FileMakerPro");
-        }
-
-        // Poke stuff in FMP
+         // Poke stuff in FMP
         try {
             updateFMP(findMethod, studyCID, mbc, dicomMeta, doseReport,
                     updateFMP, w);
