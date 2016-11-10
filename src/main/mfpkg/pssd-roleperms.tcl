@@ -93,20 +93,7 @@ actor.grant :name nig.pssd.administrator :type role  \
 	  :role -type role daris:pssd.administrator \
       
 # These services need ADMINISTER to be able to execute
-grantRolePerms nig.pssd.administrator  \
-    { { service nig.pssd.dicom.user.create ADMINISTER } \
-      { service nig.pssd.user.create ADMINISTER } \
-      { service nig.pssd.dataset.meta.copy ADMINISTER } \
-      { service nig.pssd.project.migrate ADMINISTER } \
-      { service nig.pssd.project.name.check ADMINISTER } \
-      { service nig.pssd.mbic.petvar.check ADMINISTER } \
-      { service nig.pssd.mbic.dose.upload ADMINISTER } \
-      { service nig.pssd.mbic.fmp.uploads ADMINISTER } \
-      { service nig.test ADMINISTER } \
-    }
-# Retired
-#      { service nig.pssd.bruker-dataset.time.fix ADMINISTER } \
-
+actor.grant :type role :name nig.pssd.administrator :perm < :resource -type service nig.pssd.* :access * >
 
 ##########################################################################
 # These specialized services grant roles to other roles and users
@@ -148,6 +135,8 @@ actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type d
 
 # allow executing nig.pssd.mbic.petvar.check nig.pssd.mbic.dose.upload nig.pssd.mbic.fmp.uploads services
 actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type service nig.pssd.mbic.* :access * >
+actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type service daris.* :access ACCESS >
+actor.grant :name $domain_dicom_ingest_role :type role :perm < :resource -type service om.pssd.* :access ACCESS >
 
 grantRolePerms $domain_dicom_ingest_role $dicom_ingest_doc_perms
 grantRolePerms $domain_dicom_ingest_role $dicom_ingest_service_perms

@@ -1,0 +1,1 @@
+actor.grant :type plugin:service :role -type role service-user :name nig.dicom.mbic.dose.upload

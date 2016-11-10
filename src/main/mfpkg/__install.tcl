@@ -182,6 +182,7 @@ source pssd-register-rolemembers.tcl
 # Set up roles & permissions
 #=============================================================================
 source pssd-roleperms.tcl
+source pssd-service-perms.tcl
 
 
 ####################
