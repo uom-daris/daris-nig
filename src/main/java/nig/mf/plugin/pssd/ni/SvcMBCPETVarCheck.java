@@ -351,10 +351,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 		int idx = 0;
 		while (rs.next()) {
 			String id = rs.getString("DARIS_ID");
-//			String scanType = rs.getString("Scan_Type");
+			//			String scanType = rs.getString("Scan_Type");
 
 			// We note if this CID is already in place. If it is, we are
-			// redoing one already done.  This is ok.
+			// redoing one already done.
 			if (studyCID.equals(id)) {
 				status[0] = 1;
 				status[1] = idx;
@@ -667,12 +667,13 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 					// Update the parent Study meta-data saying it's been
 					// checked for PET
-					if (update)
+					if (update) {
+						w.add("study-metadata-updated", "true");
 						setStudyMetaData(executor, studyCID, true);
-						w.add("update-study-meta", "true");
 					} else {
-						w.add("update-study-meta", "false");
+						w.add("study-metadata(PET)-updated", "false");
 					}
+				}
 
 				// Insert CT scan time from DICOM (hh:mm:ss) which is primary
 				if (ctDataSetCID != null) {
@@ -689,8 +690,11 @@ public class SvcMBCPETVarCheck extends PluginService {
 					}
 					// Update the parent Study meta-data saying it's been
 					// checked for CT
-					if (update)
+					if (update) {
 						setStudyMetaData(executor, studyCID, false);
+					} else {
+						w.add("study-metadata(CT)-updated", "false");
+					}
 				}
 			}
 			iVisit++;
