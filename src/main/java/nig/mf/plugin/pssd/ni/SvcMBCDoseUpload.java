@@ -170,6 +170,7 @@ public class SvcMBCDoseUpload extends PluginService {
         // FInd SR DataSet. Nothing to do if none.
         String srCID = findSR(executor, studyCID);
         if (srCID == null) {
+        	w.add("no-dose-report", "true");
             return;
         }
 
