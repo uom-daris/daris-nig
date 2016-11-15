@@ -68,7 +68,6 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 	@Override
 	public String description() {
-
 		return "Compares DICOM variables with values stored in FileMakerPro.  Inserts scan time into FMP and compares pharmaceutical injection start time and dose and reports discrepancies.  Meta-data are written on the parent study in nig-pssd:pssd-mbic-fmp-check when the check has been completed. ";
 	}
 
@@ -157,7 +156,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 			}
 		}
 
-		// Now find the CT DataSet that we want under the parent Study
+		// Now find the specific CT DataSet that we want under the parent Study
 		String ctDataSetCID = null;
 		if (!ctIsChecked) {
 			ctDataSetCID = findCTDataSet(executor(), studyCID);
@@ -178,27 +177,13 @@ public class SvcMBCPETVarCheck extends PluginService {
 		Date date = findDate(executor(), petDICOMMeta, ctDICOMMeta, studyCID, email);
 
 		// No date means no PET or CT DataSet was found (or they didn't have a
-		// date)
-		// So there is nothing to do
+		// date) so there is nothing to do
 		if (date == null) {
 			w.add("status", "No date could be found in the PET or CT DataSets");
 			return;
 		}
 
-		// Open FMP database with credential in server side resource file
-		// holding
-		// <dbname>,<ip>,<user>,<encoded pw>
-		MBCFMP mbc = null;
-		try {
-			String t = System.getenv("HOME");
-			String path = t + FMP_CRED_REL_PATH;
-			mbc = new MBCFMP(path);
-		} catch (Throwable tt) {
-			throw new Exception(
-					"Failed to establish JDBC connection to FileMakerPro");
-		}
-
-		// Find parent Subject
+		// Find parent Subject from DaRIS Study
 		String subject = null;
 		if (petDataSetCID != null) {
 			subject = CiteableIdUtil.getSubjectId(petDataSetCID);
@@ -213,15 +198,14 @@ public class SvcMBCPETVarCheck extends PluginService {
 				send(executor(), email, message);
 			}
 			w.add("status", message);
-			mbc.closeConnection();
 			return;
 		}
+
 		// Fetch Subject meta-data
 		XmlDoc.Element subjectMeta = AssetUtil.getAsset(executor(), subject, null);
 
 		// Fetch DICOM patient Meta from Subject and extract patient name
-		XmlDoc.Element dicomPatient = subjectMeta
-				.element("asset/meta/mf-dicom-patient");
+		XmlDoc.Element dicomPatient = subjectMeta.element("asset/meta/mf-dicom-patient");
 		if (dicomPatient == null) {
 			String error = "nig.pssd.mbc.petvar.check : Could not locate mf-dicom-patient record on Subject object. "
 					+ subject;
@@ -230,7 +214,6 @@ public class SvcMBCPETVarCheck extends PluginService {
 				send(executor(), email, error);
 			}
 			w.add("status", error);
-			mbc.closeConnection();
 			return;
 		}
 
@@ -238,11 +221,23 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String mbcPatientID = dp.getID();
 		String patientName = dp.getFullName();
 		w.add("MBC-patient-id", mbcPatientID);
+	
+		// Open FMP database with credential in server side resource file
+		// holding
+		// <dbname>,<ip>,<user>,<encoded pw>
+		MBCFMP mbc = null;
+		try {
+			String t = System.getenv("HOME");
+			String path = t + FMP_CRED_REL_PATH;
+			mbc = new MBCFMP(path);
+		} catch (Throwable tt) {
+			throw new Exception(
+					"Failed to establish JDBC connection to FileMakerPro");
+		}
 
 		// Find PET visits in FMP for this patient and date.
 		ResultSet petVisits = null;
 		try {
-			//
 			petVisits = mbc.getPETVisits(mbcPatientID, null, date);
 		} catch (Throwable t) {
 			// Skip this one with message
@@ -278,10 +273,8 @@ public class SvcMBCPETVarCheck extends PluginService {
 		}
 
 		// Find the first visit for which the DaRIS CID does not represent a
-		// study.
-		// ROb inserts the Subject CID in FMP and this service updates it to the
+		// study. ROb inserts the Subject CID in FMP and this service updates it to the
 		// actual Study
-
 		int[] status = findVisit(studyCID, petVisits);
 		int visitIdx = -1;
 		if (status[0] == -1 && status[1] == -1) {
@@ -473,9 +466,6 @@ public class SvcMBCPETVarCheck extends PluginService {
 		}
 
 		// Bummer
-		System.out.println(
-				"No PET DataSet has the meta-data element [0054,0016] under study "
-						+ studyCID);
 		String[] t = { studyCID,
 				"No PET DataSet has the meta-data element [0054,0016] under study "
 						+ studyCID };
@@ -668,10 +658,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 					// Update the parent Study meta-data saying it's been
 					// checked for PET
 					if (update) {
-						w.add("study-metadata-updated", "true");
+						w.add("daris-study-metadata-PET-updated", "true");
 						setStudyMetaData(executor, studyCID, true);
 					} else {
-						w.add("study-metadata(PET)-updated", "false");
+						w.add("daris-study-metadata-PET-updated", "false");
 					}
 				}
 
@@ -691,9 +681,10 @@ public class SvcMBCPETVarCheck extends PluginService {
 					// Update the parent Study meta-data saying it's been
 					// checked for CT
 					if (update) {
+						w.add("daris-study-metadata-CT-updated", "true");
 						setStudyMetaData(executor, studyCID, false);
 					} else {
-						w.add("study-metadata(CT)-updated", "false");
+						w.add("daris-study-metadata-CT-updated", "false");
 					}
 				}
 			}
