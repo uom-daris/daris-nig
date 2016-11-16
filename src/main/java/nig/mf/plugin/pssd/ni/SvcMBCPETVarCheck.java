@@ -130,7 +130,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 			ctIsChecked = false;
 		}
 		if (petIsChecked && ctIsChecked) {
-			w.add("status", "Both PET and CT havea aready been checked - use force=true to over-ride");
+			w.add("status", "Both PET and CT have already been checked - use force=true to over-ride");
 			return;
 		}
 
