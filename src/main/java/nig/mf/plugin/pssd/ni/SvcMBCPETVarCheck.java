@@ -53,7 +53,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 				0, 1);
 		_defn.add(me);
 		me = new Interface.Element("update", BooleanType.DEFAULT,
-				"Actually update FMP with the new values. Defaults to false.",
+				"Actually update FMP with the new values. Defaults to true.",
 				0, 1);
 		_defn.add(me);
 
@@ -98,7 +98,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String studyID = args.value("id");
 		String studyCID = args.value("cid");
 		String email = args.stringValue("email", EMAIL);
-		Boolean update = args.booleanValue("update", false);
+		Boolean update = args.booleanValue("update", true);
 		boolean noEmail = args.booleanValue("no-email", false);
 		if(noEmail){
 			email = null;

@@ -39,7 +39,7 @@ public class SvcMBCFMPUploads extends PluginService {
 				0, 1);
 		_defn.add(me);
 		//
-		me = new Interface.Element("update", BooleanType.DEFAULT, "Actually update FMP with the new values. Defaults to false.",
+		me = new Interface.Element("update", BooleanType.DEFAULT, "Actually update FMP with the new values. Defaults to true.",
 				0, 1);
 		_defn.add(me);
 		//
@@ -85,7 +85,7 @@ public class SvcMBCFMPUploads extends PluginService {
 	public void execute(XmlDoc.Element args, Inputs in, Outputs out, XmlWriter w) throws Throwable {
 
 		// Parse input ID
-		Boolean update = args.booleanValue("update", false);
+		Boolean update = args.booleanValue("update", true);
 		String cid = args.value("cid");
 		String id = args.value("id");
 		String email = args.stringValue("email", EMAIL);
