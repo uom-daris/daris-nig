@@ -118,17 +118,20 @@ public class SvcMBCDoseUpload extends PluginService {
         if (studyID == null && studyCID == null) {
             throw new Exception("Must supply 'id' or 'cid'");
         }
-        if (studyCID == null)
+        if (studyCID == null) {
             studyCID = CiteableIdUtil.idToCid(executor(), studyID);
+        }
 
         // Have we already processed the SR DataSet for this Study
         XmlDoc.Element studyMeta = AssetUtil.getAsset(executor(), studyCID,
                 null);
         Boolean isProcessed = checked(executor(), studyMeta);
-        if (force)
+        if (force) {
             isProcessed = false;
-        if (isProcessed)
+        }
+        if (isProcessed) {
             return;
+        }
  
         
         // Open FMP database with credential in server side resource file
