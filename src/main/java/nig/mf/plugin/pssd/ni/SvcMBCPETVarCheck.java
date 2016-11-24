@@ -16,6 +16,7 @@ import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
+import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
@@ -59,6 +60,8 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 		_defn.add(new Interface.Element("no-email", BooleanType.DEFAULT,
 				"Do not send email. Defaults to false.", 0, 1));
+		_defn.add(new Interface.Element("imax", IntegerType.DEFAULT,
+				"Max DataSet CID child integer. Defaults ot all", 0, 1));
 	}
 
 	@Override
@@ -100,6 +103,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String email = args.stringValue("email", EMAIL);
 		Boolean update = args.booleanValue("update", true);
 		boolean noEmail = args.booleanValue("no-email", false);
+		Integer iMax = args.intValue("imax", 100000000);
 		if(noEmail){
 			email = null;
 		}
@@ -141,7 +145,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		// Find one (good) PET DataSet under the given parent Study
 		String petDataSetCID = null;
 		if (!petIsChecked) {
-			String[] t = findPETDataSet(executor(), studyCID);
+			String[] t = findPETDataSet(executor(), studyCID, iMax);
 			if (t != null) {
 				if (t.length == 2) {
 					// No good PET data sets found
@@ -150,16 +154,16 @@ public class SvcMBCPETVarCheck extends PluginService {
 						send(executor(), email, t[1]);
 					}
 					w.add("status", t[1]);
-					return;
+				} else {
+					petDataSetCID = t[0];
 				}
-				petDataSetCID = t[0];
 			}
 		}
 
 		// Now find the specific CT DataSet that we want under the parent Study
 		String ctDataSetCID = null;
 		if (!ctIsChecked) {
-			ctDataSetCID = findCTDataSet(executor(), studyCID);
+			ctDataSetCID = findCTDataSet(executor(), studyCID, iMax);
 		}
 
 		// Return if nothing found (could be a raw study)
@@ -167,6 +171,8 @@ public class SvcMBCPETVarCheck extends PluginService {
 			w.add("status", "No PET or CT data sets were found - may be a raw study.");
 			return;
 		}
+		w.add("PET-DataSet", petDataSetCID);
+		w.add("CT-DataSet", ctDataSetCID);
 
 		// Extract the native DICOM meta-data from the DataSets. Null if no cid
 		XmlDoc.Element petDICOMMeta = dicomMetaData(executor(), petDataSetCID, null);
@@ -221,7 +227,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		String mbcPatientID = dp.getID();
 		String patientName = dp.getFullName();
 		w.add("MBC-patient-id", mbcPatientID);
-	
+
 		// Open FMP database with credential in server side resource file
 		// holding
 		// <dbname>,<ip>,<user>,<encoded pw>
@@ -441,7 +447,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		return null;
 	}
 
-	private String[] findPETDataSet(ServiceExecutor executor, String studyCID)
+	private String[] findPETDataSet(ServiceExecutor executor, String studyCID, Integer iMax)
 			throws Throwable {
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.add("pdist", "0");
@@ -451,17 +457,24 @@ public class SvcMBCPETVarCheck extends PluginService {
 				+ "') and model='om.pssd.dataset' and xpath(mf-dicom-series/modality)='PT'";
 		dm.add("where", query);
 		XmlDoc.Element r = executor().execute("asset.query", dm.root());
-		if (r == null || !r.elementExists("cid"))
+		if (r == null || !r.elementExists("cid")) {
 			return null;
+		}
 
 		// We need a PET data set with the required DICOM meta-data element
 		Collection<String> cids = r.values("cid");
+		if (cids==null) return null;
 		for (String cid : cids) {
-			XmlDoc.Element dicomMeta = dicomMetaData(executor, cid, null);
-			XmlDoc.Element rp = dicomMeta.element("de[@tag='00540016']");
-			if (rp != null) {
-				String[] t = { cid };
-				return t;
+			String child = CiteableIdUtil.getLastSection(cid);
+			Integer childIdx = Integer.parseInt(child);
+			System.out.println("cid, child, idx="+cid + "," + child + "," + childIdx);
+			if (childIdx<=iMax) {
+				XmlDoc.Element dicomMeta = dicomMetaData(executor, cid, null);
+				XmlDoc.Element rp = dicomMeta.element("de[@tag='00540016']");
+				if (rp != null) {
+					String[] t = { cid };
+					return t;
+				}
 			}
 		}
 
@@ -472,7 +485,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		return t;
 	}
 
-	private String findCTDataSet(ServiceExecutor executor, String cid)
+	private String findCTDataSet(ServiceExecutor executor, String cid, Integer iMax)
 			throws Throwable {
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.add("pdist", "0");
@@ -491,7 +504,11 @@ public class SvcMBCPETVarCheck extends PluginService {
 			return null;
 
 		// FInd CID of DataSet
-		return r.value("cid");
+		String cidDS = r.value("cid");
+		Integer childIdx = Integer.parseInt(CiteableIdUtil.getLastSection(cidDS));
+		if (childIdx<=iMax) return cidDS;
+		return null;
+
 	}
 
 	static public void send(ServiceExecutor executor, String email, String body)

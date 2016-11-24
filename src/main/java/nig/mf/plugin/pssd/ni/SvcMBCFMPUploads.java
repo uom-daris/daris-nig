@@ -1,9 +1,11 @@
 package nig.mf.plugin.pssd.ni;
 
 import arc.mf.plugin.PluginService;
+import arc.mf.plugin.PluginService.Interface;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
+import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
@@ -49,6 +51,9 @@ public class SvcMBCFMPUploads extends PluginService {
 		
         _defn.add(new Interface.Element("no-email", BooleanType.DEFAULT,
                 "Do not send email. Defaults to false.", 0, 1));
+		_defn.add(new Interface.Element("imax", IntegerType.DEFAULT,
+				"Max DataSet CID child integer. Defaults ot all", 0, 1));
+
 
 	}
 
@@ -91,6 +96,7 @@ public class SvcMBCFMPUploads extends PluginService {
 		String email = args.stringValue("email", EMAIL);
 		Boolean force = args.booleanValue("force", false);
         Boolean noEmail = args.booleanValue("no-email", null);
+		String iMax = args.value("imax");
         
 		// Do it
 		XmlDocMaker dm = new XmlDocMaker("args");
@@ -99,6 +105,7 @@ public class SvcMBCFMPUploads extends PluginService {
 		dm.add("email", email);
 		dm.add("force", force);
 		dm.add("update", update);
+		if (iMax!=null) dm.add("imax", iMax);
 		if(noEmail!=null){
 		    dm.add("no-email", noEmail);
 		}

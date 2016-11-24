@@ -10,9 +10,11 @@ import java.util.Date;
 import arc.mf.plugin.PluginLog;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.ServiceExecutor;
+import arc.mf.plugin.PluginService.Interface;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
+import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
@@ -64,6 +66,9 @@ public class SvcMBCDoseUpload extends PluginService {
 
         _defn.add(new Interface.Element("no-email", BooleanType.DEFAULT,
                 "Do not send email. Defaults to false.", 0, 1));
+		_defn.add(new Interface.Element("imax", IntegerType.DEFAULT,
+				"Max DataSet CID child integer. Defaults ot all", 0, 1));
+
     }
 
     @Override
@@ -109,6 +114,8 @@ public class SvcMBCDoseUpload extends PluginService {
         if (noEmail) {
             email = null;
         }
+		Integer iMax = args.intValue("imax", 100000000);
+
 
         //
         int findMethod = 0; // Find by first Visit in FMP with DaRIS ID matching
@@ -150,16 +157,9 @@ public class SvcMBCDoseUpload extends PluginService {
 
         // Do it
         try {
-            update(executor(), mbc, updateFMP, studyCID, findMethod, w);
+            update(executor(), mbc, updateFMP, studyCID, findMethod,iMax,  w);
 
-            // Indicate we have processed this study successfully
-            if (updateFMP) {
-                w.add("update-study-meta", true);
-                setStudyMetaData(executor(), studyCID);
-            } else {
-                w.add("update-study-meta", false);
-            }
-        } catch (Throwable t) {
+         } catch (Throwable t) {
             String error = "nig.dicom.mbic.dose.upload : For Study '" + studyCID
                     + "' an error occured extracting (from DICOM) or setting (in FMP) the dose meta-data : "
                     + t.getMessage();
@@ -186,14 +186,16 @@ public class SvcMBCDoseUpload extends PluginService {
     }
 
     private void update(ServiceExecutor executor,  MBCFMP mbc, Boolean updateFMP,
-            String studyCID, int findMethod, XmlWriter w) throws Throwable {
+            String studyCID, int findMethod, Integer iMax, XmlWriter w) throws Throwable {
 
         // FInd SR DataSet. Nothing to do if none.
-        String srCID = findSR(executor, studyCID);
+        String srCID = findSR(executor, studyCID, iMax);
         if (srCID == null) {
         	w.add("no-dose-report", "true");
+            w.add("update-study-meta", false);
             return;
         }
+        w.add("Dose-DataSet", srCID);
 
         // CHeck Series type
         XmlDoc.Element seriesMeta = AssetUtil.getAsset(executor(), srCID, null);
@@ -233,6 +235,10 @@ public class SvcMBCDoseUpload extends PluginService {
         try {
             updateFMP(findMethod, studyCID, mbc, dicomMeta, doseReport,
                     updateFMP, w);
+            // Indicate we have processed this study successfully
+            if (updateFMP) {
+                w.add("update-study-meta", true);
+            }
         } catch (Throwable t) {
             mbc.closeConnection();
             throw new Exception(t);
@@ -242,7 +248,7 @@ public class SvcMBCDoseUpload extends PluginService {
         mbc.closeConnection();
     }
 
-    private String findSR(ServiceExecutor executor, String studyCID)
+    private String findSR(ServiceExecutor executor, String studyCID, Integer iMax)
             throws Throwable {
         XmlDocMaker dm = new XmlDocMaker("args");
         String where = "cid starts with '" + studyCID
@@ -250,8 +256,9 @@ public class SvcMBCDoseUpload extends PluginService {
         dm.add("pdist", "0");
         dm.add("where", where);
         XmlDoc.Element r = executor.execute("asset.query", dm.root());
-        if (r == null)
+        if (r == null) {
             return null;
+        }
 
         Collection<String> ids = r.values("id");
         if (ids == null || ids.isEmpty()) {
@@ -263,7 +270,11 @@ public class SvcMBCDoseUpload extends PluginService {
                             + studyCID + " - cannot handle");
         }
         String id = r.value("id");
-        return CiteableIdUtil.idToCid(executor, id);
+        String dsCID = CiteableIdUtil.idToCid(executor, id);
+        
+		Integer childIdx = Integer.parseInt(CiteableIdUtil.getLastSection(dsCID));
+		if (childIdx<=iMax) return dsCID;   
+        return null;
     }
 
     private void updateFMP(int findMethod, String studyCID, MBCFMP mbc,
@@ -410,9 +421,10 @@ public class SvcMBCDoseUpload extends PluginService {
                 w.pop();
                 //
                 // Update the dose fields in FMP
-                if (update)
+                if (update) {
                     mbc.updateDose(mbcPatientID, date, doseLengthProductTotal,
                             XRayModType, "" + dlp, kVp, current, false);
+                }
             }
             iVisit++;
         }
@@ -420,7 +432,7 @@ public class SvcMBCDoseUpload extends PluginService {
 
     /**
      * FInd the index of the visit for which the DaRIS ID is equal to the Study CID
-     * Note that early version of SvcMBCPetVarCheck set the DataSet CID notr the Study
+     * Note that early version of SvcMBCPetVarCheck set the DataSet CID not the Study
      * so account for that
      * 
      * @param rs
@@ -448,8 +460,9 @@ public class SvcMBCDoseUpload extends PluginService {
             }
 
             if (findMethod == 0) {
-                if (id2.equals(studyCID))
+                if (id2.equals(studyCID)) {
                     return n;
+                }
             } else {
             	throw new Exception ("Unhandled visit find method");
             }
