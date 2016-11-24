@@ -10,7 +10,6 @@ import java.util.Date;
 import arc.mf.plugin.PluginLog;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.ServiceExecutor;
-import arc.mf.plugin.PluginService.Interface;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
@@ -67,7 +66,7 @@ public class SvcMBCDoseUpload extends PluginService {
         _defn.add(new Interface.Element("no-email", BooleanType.DEFAULT,
                 "Do not send email. Defaults to false.", 0, 1));
 		_defn.add(new Interface.Element("imax", IntegerType.DEFAULT,
-				"Max DataSet CID child integer. Defaults ot all", 0, 1));
+				"Max DataSet CID child integer value (for testing). Defaults to all DataSets.", 0, 1));
 
     }
 
@@ -231,14 +230,10 @@ public class SvcMBCDoseUpload extends PluginService {
                             + srCID);
         }
 
-         // Poke stuff in FMP
+        // Update FMP if possible
         try {
-            updateFMP(findMethod, studyCID, mbc, dicomMeta, doseReport,
+            updateFMP(executor, findMethod, studyCID, mbc, dicomMeta, doseReport,
                     updateFMP, w);
-            // Indicate we have processed this study successfully
-            if (updateFMP) {
-                w.add("update-study-meta", true);
-            }
         } catch (Throwable t) {
             mbc.closeConnection();
             throw new Exception(t);
@@ -277,7 +272,7 @@ public class SvcMBCDoseUpload extends PluginService {
         return null;
     }
 
-    private void updateFMP(int findMethod, String studyCID, MBCFMP mbc,
+    private void updateFMP(ServiceExecutor executor, int findMethod, String studyCID, MBCFMP mbc,
             XmlDoc.Element dicomMeta, XmlDoc.Element doseReport, Boolean update,
             XmlWriter w) throws Throwable {
 
@@ -424,6 +419,8 @@ public class SvcMBCDoseUpload extends PluginService {
                 if (update) {
                     mbc.updateDose(mbcPatientID, date, doseLengthProductTotal,
                             XRayModType, "" + dlp, kVp, current, false);
+                  	setStudyMetaData (executor, studyCID);
+                    w.add("update-study-meta", true);
                 }
             }
             iVisit++;

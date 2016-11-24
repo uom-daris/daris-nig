@@ -1,7 +1,6 @@
 package nig.mf.plugin.pssd.ni;
 
 import arc.mf.plugin.PluginService;
-import arc.mf.plugin.PluginService.Interface;
 import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
@@ -13,10 +12,7 @@ import arc.xml.XmlWriter;
 
 
 public class SvcMBCFMPUploads extends PluginService {
-	// Relative location of resource file on server
-	private static final String FMP_CRED_REL_PATH = "/.fmp/petct_fmpcheck";
 	private static final String EMAIL = "williamsr@unimelb.edu.au";
-	//private static final String EMAIL = "nkilleen@unimelb.edu.au";
 
 	private Interface _defn;
 
@@ -52,7 +48,7 @@ public class SvcMBCFMPUploads extends PluginService {
         _defn.add(new Interface.Element("no-email", BooleanType.DEFAULT,
                 "Do not send email. Defaults to false.", 0, 1));
 		_defn.add(new Interface.Element("imax", IntegerType.DEFAULT,
-				"Max DataSet CID child integer. Defaults ot all", 0, 1));
+				"Max DataSet CID child integer value (for testing). Defaults to all DataSets.", 0, 1));
 
 
 	}
