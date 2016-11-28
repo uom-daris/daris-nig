@@ -499,12 +499,12 @@ public class SvcMBCPETVarCheck extends PluginService {
 				+ " and (not(xpath(mf-dicom-series/description) contains literal('Topogram')) and "
 				+ " not(xpath(mf-dicom-series/description) contains literal('Patient Protocol')))";
 		dm.add("where", query);
-		XmlDoc.Element r = executor().execute("asset.query", dm.root());
-		if (r == null)
+		XmlDoc.Element re = executor().execute("asset.query", dm.root());
+		if (!re.elementExists("cid")) {
 			return null;
-
+		}
 		// FInd CID of DataSet
-		String cidDS = r.value("cid");
+		String cidDS = re.value("cid");
 		Integer childIdx = Integer.parseInt(CiteableIdUtil.getLastSection(cidDS));
 		if (childIdx<=iMax) return cidDS;
 		return null;
