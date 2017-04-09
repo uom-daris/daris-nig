@@ -190,38 +190,42 @@ source pssd-service-perms.tcl
 ####################
 if { [info exists mbic ] } {
     if { $mbic == "true" } {
-       # Namespaces/cid roots
-	   source mbic/mbic-namespaces-cidroot.tcl
+        # Namespaces/cid roots
+	    source mbic/mbic-namespaces-cidroot.tcl
        
-       # Doc Types
-       source mbic/mbic-pssd-doctypes.tcl
+        # Doc Types
+        source mbic/mbic-pssd-doctypes.tcl
        
-       # Permissions
-       source mbic/mbic-roleperms.tcl      
+        # Permissions
+        source mbic/mbic-roleperms.tcl      
        
-       # Triggers
-       source mbic/triggers-install.tcl
+        # Triggers
+        source mbic/triggers-install.tcl
        
-       # Methods
-       source mbic/mbic-pssd-method-human.tcl
-       create-MBIC-Human-method $methodAction $fillInMethods
-	   #      
-       source mbic/mbic-pssd-method-animal.tcl
-       create-MBIC-Animal-method $methodAction $fillInMethods
-       #
-       source mbic/mbic-pssd-method-mineral.tcl
-       create-MBIC-Mineral-method $methodAction $fillInMethods
-       #
-       source mbic/mbic-pssd-method-QA.tcl
-       create-MBIC-QA-method $methodAction $fillInMethods
-       #
-       source mbic/mbic-pssd-method-artificial.tcl
-       create-MBIC-Artificial-method $methodAction $fillInMethods
-       #
-       source mbic/mbic-pssd-method-generic.tcl
-       create-MBIC-Generic-method  $methodAction $fillInMethods
-       #
-       source mbic/mbic-pssd-method-MR-archive.tcl
-       create-MBIC-MR-Archive-method $methodAction $fillInMethods
+        # Methods
+        source mbic/mbic-pssd-method-human.tcl
+        create-MBIC-Human-method $methodAction $fillInMethods
+	    #      
+        source mbic/mbic-pssd-method-animal.tcl
+        create-MBIC-Animal-method $methodAction $fillInMethods
+        #
+        source mbic/mbic-pssd-method-mineral.tcl
+        create-MBIC-Mineral-method $methodAction $fillInMethods
+        #
+        source mbic/mbic-pssd-method-QA.tcl
+        create-MBIC-QA-method $methodAction $fillInMethods
+        #
+        source mbic/mbic-pssd-method-artificial.tcl
+        create-MBIC-Artificial-method $methodAction $fillInMethods
+        #
+        source mbic/mbic-pssd-method-generic.tcl
+        create-MBIC-Generic-method  $methodAction $fillInMethods
+        #
+        source mbic/mbic-pssd-method-MR-archive.tcl
+        create-MBIC-MR-Archive-method $methodAction $fillInMethods
+        #
+        source mbic/mbic-pssd-method-ms-gait.tcl
+        create-MBIC-MS-GAIT-method $methodAction $fillInMethods
+
     }
 }
