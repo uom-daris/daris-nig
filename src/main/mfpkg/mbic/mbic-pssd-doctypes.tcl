@@ -28,6 +28,8 @@ asset.doc.type.update :create yes :type nig-daris:ms-gait-subject \
     :label "nig-daris:ms-gait-subject" \
     :description "Document for MS Gait subject information." \
     :definition < \
+        :element -name email -label "Email" -type email-address -encrypt true -min-occurs 0 -max-occurs 1 < \
+            :description "The email address of the subject." > \
         :element -name address -label "Address" -type string -encrypt true -min-occurs 0 -max-occurs 1 < \
             :description "The address of the subject." > \
         :element -name phone -label "Phone Number" -type string -encrypt true -min-occurs 0 -max-occurs 3  < \
