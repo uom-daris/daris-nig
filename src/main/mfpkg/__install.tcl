@@ -59,7 +59,7 @@ if { $addStudyTypes == 1 } {
 # Install plugins
 # ============================================================================
 set plugin_label      [string toupper PACKAGE_$package]
-set plugin_namespace  mflux/plugins
+set plugin_namespace  mflux/plugins/daris-nig
 set plugin_zip        daris-nig-plugin.zip
 set plugin_jar        daris-nig-plugin.jar
 set module_class      nig.mf.plugin.pssd.ni.NIGPSSDPluginModule
