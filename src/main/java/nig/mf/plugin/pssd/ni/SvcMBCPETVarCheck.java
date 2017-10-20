@@ -500,11 +500,6 @@ public class SvcMBCPETVarCheck extends PluginService {
 				+ " not(xpath(mf-dicom-series/description) contains literal('Patient Protocol')))";
 		dm.add("where", query);
 		XmlDoc.Element r = executor().execute("asset.query", dm.root());
-		if (r == null) {
-			return null;
-		}
-
-		// FInd CID of DataSet
 		String cidDS = r.value("cid");
 		if (cidDS==null) return null;
 		Integer childIdx = Integer.parseInt(CiteableIdUtil.getLastSection(cidDS));

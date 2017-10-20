@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>au.edu.unimelb.daris</groupId>
 	<artifactId>daris-nig</artifactId>
-	<version>1.0.5</version>
+	<version>1.0.7</version>
 	<packaging>jar</packaging>
 	<name>daris-nig</name>
 	<url>https://github.com/uom-daris/daris-nig</url>

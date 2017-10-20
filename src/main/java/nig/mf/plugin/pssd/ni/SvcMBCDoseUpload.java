@@ -159,7 +159,7 @@ public class SvcMBCDoseUpload extends PluginService {
             update(executor(), mbc, updateFMP, studyCID, findMethod,iMax,  w);
 
          } catch (Throwable t) {
-            String error = "nig.dicom.mbic.dose.upload : For Study '" + studyCID
+            String error = "nig.pssd.mbic.dose.upload : For Study '" + studyCID
                     + "' an error occured extracting (from DICOM) or setting (in FMP) the dose meta-data : "
                     + t.getMessage();
 

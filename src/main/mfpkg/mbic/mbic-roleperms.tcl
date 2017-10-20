@@ -20,7 +20,9 @@ asset.namespace.acl.set :namespace $ns \
 # DocTypes
 
 set pssd_doc_perms { { document nig-daris:pssd-mbic-fmp-check ACCESS } \
-						{ document nig-daris:pssd-mbic-fmp-check PUBLISH } }
+					 { document nig-daris:pssd-mbic-fmp-check PUBLISH } \
+                     { document nig-daris:ms-gait-subject ACCESS } \
+                     { document nig-daris:ms-gait-subject PUBLISH } }
 
 # User
 set domain_model_user_role        nig.pssd.model.user
