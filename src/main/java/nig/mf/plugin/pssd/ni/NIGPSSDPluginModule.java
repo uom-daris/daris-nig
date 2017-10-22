@@ -27,6 +27,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		_svs.add(new SvcProjectMigrate());
 		_svs.add(new SvcProjectNameCheck());
 		_svs.add(new SvcSubjectMetaSet());
+		_svs.add(new SvcBase64());
 		//
 		_svs.add(new SvcUserCreate());
 		_svs.add(new SvcDICOMUserCreate());
@@ -50,6 +51,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		_svs.add(new SvcMBCPETVarCheck());
 		_svs.add(new SvcMBCDoseUpload());
 		_svs.add(new SvcMBCFMPUploads());
+		_svs.add(new SvcMBCProjectMigrate());
 
 		// Test service
 		_svs.add(new SvcTesting());
