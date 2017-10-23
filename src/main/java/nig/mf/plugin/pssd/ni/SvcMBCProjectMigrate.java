@@ -1,16 +1,18 @@
 package nig.mf.plugin.pssd.ni;
 
+import java.io.ByteArrayInputStream;
 import java.util.Collection;
+import java.util.Date;
 
 import mbc.FMP.MBCFMP;
 import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.util.AssetUtil;
+import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.PluginService.Interface.Element;
 import arc.mf.plugin.dtype.CiteableIdType;
 import arc.mf.plugin.dtype.StringType;
-import arc.utils.StringUtil;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
@@ -37,7 +39,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	public String description() {
 
-		return "Migrates an MBC DaRIS project from visit-based Subject IDs to subject-based subject IDs.";
+		return "Migrates an MBC DaRIS project from visit-based Subject IDs to subject-based subject IDs.  If an output is supplied it generates a CSV file mapping DaRIS ID to FMP ID.";
 	}
 
 	public Interface definition() {
@@ -51,6 +53,15 @@ public class SvcMBCProjectMigrate extends PluginService {
 	}
 
 
+	@Override
+	public int minNumberOfOutputs() {
+		return 0;
+	}
+
+	@Override
+	public int maxNumberOfOutputs() {
+		return 1;
+	}
 
 	public void execute(XmlDoc.Element args, Inputs inputs, Outputs outputs, XmlWriter w)
 			throws Throwable {
@@ -74,6 +85,14 @@ public class SvcMBCProjectMigrate extends PluginService {
 					"Failed to establish JDBC connection to FileMakerPro");
 		}
 
+		// Output file
+		PluginService.Output output = null;
+		String type = "text/csv";
+		StringBuilder sb = new StringBuilder();
+		if (outputs.size()==1) {
+			output = outputs.output(0);
+		}
+
 
 		// Fetch the visit-based Subjects
 		XmlDocMaker dm = new XmlDocMaker("args");
@@ -87,6 +106,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		XmlDoc.Element r = executor().execute("om.pssd.collection.member.list", dm.root());
 
 		// Iterate through SUbjects
+		sb.append("DaRIS ID").append(",").append("first name").append(",").append("last name").append(",").append("sex").append(",").append("dob").append(",").append("FMP ID").append("\n");
 		Collection<String> subjectIDs = r.values("object/id");
 		for (String subjectID : subjectIDs) {
 
@@ -100,7 +120,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 			// Try to lookup in FMP
 			String fmpID = null;
 			try {
-				fmpID = findInFMP (executor(), mbc, dicomMeta, w);
+				fmpID = findInFMP (executor(),subjectID, mbc, dicomMeta, sb, w);
+				sb.append("\n");
 
 				if (fmpID!=null) {
 					w.add("found", "true");
@@ -125,18 +146,42 @@ public class SvcMBCProjectMigrate extends PluginService {
 		// Close up FMP
 		mbc.closeConnection();
 
+		// Write CSV file
+		if (outputs.size()==1) {
+			String os = sb.toString();
+			byte[] b = os.getBytes("UTF-8");
+			output.setData(new ByteArrayInputStream(b), b.length, type);
+		}
+
 	}
 
-	private String findInFMP (ServiceExecutor executor, MBCFMP mbc, XmlDoc.Element dicomMeta, XmlWriter w) throws Throwable {
+	private String findInFMP (ServiceExecutor executor, String cid, MBCFMP mbc, XmlDoc.Element dicomMeta, StringBuilder sb, XmlWriter w) throws Throwable {
 		String mbcID = null;
 
-		// FInd Patient
+		// Parse meta-data
 		DICOMPatient dp = new DICOMPatient(dicomMeta);	
-		if (dp.getFirstName()!=null && dp.getLastName()!=null && dp.getSex()!=null && dp.getDOB()!=null) {
+		//
+		String fn = dp.getFirstName();
+		if (fn!=null) {
+			fn = dp.getFirstName().replaceAll("'",  "");
+		}
+		String ln = dp.getLastName();
+		if (ln!=null) {
+			ln = dp.getLastName().replaceAll("'",  "");
+		}
+		//
+		String sex = dp.getSex();
+		//
+		Date dob = dp.getDOB();
+		String dob2 = null;
+		if (dob!=null) {
+			dob2 = DateUtil.formatDate(dob, "dd-MMM-yyyy");
+		}
+
+		if (fn!=null && ln!=null && dp.getSex()!=null && dp.getDOB()!=null) {
 			w.add("dicomMeta", "complete");
 			// Convert to FMP form
-			String sex = dp.getSex();
-			String sex2 = null;
+			String sex2 = sex;
 			if (sex!=null) {
 				if (sex.equalsIgnoreCase("male")) {
 					sex2 = "M";
@@ -147,23 +192,31 @@ public class SvcMBCProjectMigrate extends PluginService {
 				}
 			}
 
-			System.out.println("lastescaped="+ StringUtil.escapeSingleQuotes(dp.getLastName()));
+
+			// The convention in FMP is to NOT have single quotes in names like O'Connor.
+			// So remove any
 			/*
 			String ln =  StringUtil.escapeSingleQuotes(dp.getLastName());
 			String fn = StringUtil.escapeSingleQuotes(dp.getFirstName());
-			*/
-			//
-			String fn = dp.getFirstName().replaceAll("'",  "");
-			String ln = dp.getLastName().replaceAll("'",  "");
+			 */
 			mbcID = mbc.findPatient(fn, ln, sex2, dp.getDOB());
+			//
+			sb.append(cid).append(",").append(fn).append(",").append(ln).append(",").append(sex).append(",").append(dob2);
+
 		} else {
 			w.add("dicomMeta", "incomplete");
 			w.add("first", dp.getFirstName());
 			w.add("last", dp.getLastName());
 			w.add("sex", dp.getSex());
 			w.add("dob", dp.getDOB());
-
+			sb.append(cid).append(",").append(fn).append(",").append(ln).append(",").append(sex).append(",").append(dob2);
 		}
+		if (mbcID!=null) {
+			sb.append(",").append(mbcID);
+		} else {
+			sb.append(",").append("not-found");
+		}
+		//
 		return mbcID;
 	}
 
