@@ -7,10 +7,12 @@ import java.util.Date;
 import mbc.FMP.MBCFMP;
 import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.util.AssetUtil;
+import nig.mf.pssd.plugin.util.CiteableIdUtil;
 import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.PluginService.Interface.Element;
+import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc;
@@ -27,9 +29,13 @@ public class SvcMBCProjectMigrate extends PluginService {
 		// matches DocType daris:pssd-repository-description
 
 		_defn = new Interface();
-		_defn.add(new Element("id", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate.", 1, 1));
+		_defn.add(new Element("fmpid",StringType.DEFAULT, "A fake FMP patient ID for testing without FMP access.", 0, 1));
+		_defn.add(new Element("from", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate from.", 1, 1));
+		_defn.add(new Element("to", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate to. Defaults to 'to'", 0, 1));
 		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the subjects (defaults to 1).", 0, 1));
 		_defn.add(new Element("size", StringType.DEFAULT, "The number of subjects to find (defaults to all).", 0, 1));
+		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list mapping to FMP, don't migrate any data (defaults to true).", 0, 1));
+		_defn.add(new Element("clone", BooleanType.DEFAULT, "Actually clone the data-sets. If false, all objects are made to the Study level.", 0, 1));
 	}
 
 	public String name() {
@@ -67,34 +73,36 @@ public class SvcMBCProjectMigrate extends PluginService {
 			throws Throwable {
 
 		// Parse arguments
-		String oldProjectID = args.stringValue("id");
+		String oldProjectID = args.stringValue("from");
+		String newProjectID = args.stringValue("to", oldProjectID);
 		String size = args.stringValue("size");
 		String idx = args.stringValue("idx");;
+		Boolean list = args.booleanValue("list-only", true);
+		Boolean clone = args.booleanValue("clone", false);
+		String fmpID = args.stringValue("fmpid");
+		//
 		XmlDoc.Element projectMeta = AssetUtil.getAsset(executor(), oldProjectID, null);
 		String methodID = projectMeta.value("asset/meta/daris:pssd-project/method/id");
 
-
 		// OPen FMP
 		MBCFMP mbc = null;
-		try {
-			String t = System.getenv("HOME");
-			String path = t + FMP_CRED_REL_PATH;
-			mbc = new MBCFMP(path);
-		} catch (Throwable tt) {
-			throw new Exception(
-					"Failed to establish JDBC connection to FileMakerPro");
+		if (fmpID==null) {
+			try {
+				String t = System.getenv("HOME");
+				String path = t + FMP_CRED_REL_PATH;
+				mbc = new MBCFMP(path);
+			} catch (Throwable tt) {
+				throw new Exception(
+						"Failed to establish JDBC connection to FileMakerPro");
+			}
 		}
 
-		// Output file
+		// Optional output CSV file
 		PluginService.Output output = null;
 		String type = "text/csv";
 		StringBuilder sb = new StringBuilder();
-		if (outputs.size()==1) {
-			output = outputs.output(0);
-		}
 
-
-		// Fetch the visit-based Subjects
+		// Fetch the visit-based Subjects from the DaRIS project
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.add("id", oldProjectID);
 		if (idx!=null) {
@@ -103,6 +111,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		if (size!=null) {
 			dm.add("size", size);
 		}
+		dm.add("sort", "true");
 		XmlDoc.Element r = executor().execute("om.pssd.collection.member.list", dm.root());
 
 		// Iterate through SUbjects
@@ -114,42 +123,59 @@ public class SvcMBCProjectMigrate extends PluginService {
 			XmlDoc.Element meta = AssetUtil.getAsset(executor(), subjectID, null);
 			XmlDoc.Element dicomMeta =  meta.element("asset/meta/mf-dicom-patient");
 			w.push("subject");
-			w.add("id", subjectID);
+			w.add("old-id", subjectID);
 			w.add(dicomMeta);
 
-			// Try to lookup in FMP
-			String fmpID = null;
-			try {
-				fmpID = findInFMP (executor(),subjectID, mbc, dicomMeta, sb, w);
-				sb.append("\n");
+			// Try to lookup in FMP or use given value
+			String fmpID2 = null;
+			if (fmpID==null) {
+				try {
+					fmpID2 = findInFMP (executor(),subjectID, mbc, dicomMeta, sb, w);
 
-				if (fmpID!=null) {
-					w.add("found", "true");
-					w.add("fmpPatientID", fmpID);
-				} else {
-					w.add("found", "false");
+					if (fmpID2!=null) {
+						w.add("found", "true");
+						w.add("fmpPatientID", fmpID2);
+					} else {
+						w.add("found", "false");
+						// Create new Patient Record in FMP
+					}
 
-					// Create new Patient Record in FMP
+				} catch (Throwable t) {
+					w.add("FMPerror", t.getMessage());
 				}
-
-
-				// Now migrate the data
-				String newProjectID = oldProjectID;
-				//			String newSubjectID = migrateSubject (executor(), newProjectID, methodID, subjectID, fmpID);
-
-			} catch (Throwable t) {
-				w.add("FMPerror", t.getMessage());
+			} else {
+				fmpID2 = fmpID;
+				w.add("found", "true");
+				w.add("fmpPatientID", fmpID2);				
 			}
+
+			// If we didn't find  the Subject in FMP proceed
+			if (fmpID2==null) {
+				// Create FMP entry
+				throw new Exception ("No FMP ID");
+			}
+
+			// Proceed now we have a FMP SUbject ID one way or the other
+			sb.append("\n");
+
+			// Now migrate the data for this Subject
+			if (!list) {
+				String newSubjectID = migrateSubject (executor(), newProjectID, methodID, subjectID, fmpID2, clone, w);
+			}
+			//
 			w.pop();
 		}
 
 		// Close up FMP
-		mbc.closeConnection();
+		if (fmpID==null) {
+			mbc.closeConnection();
+		}
 
 		// Write CSV file
-		if (outputs.size()==1) {
+		if (outputs!=null && outputs.size()==1) {
 			String os = sb.toString();
 			byte[] b = os.getBytes("UTF-8");
+			output = outputs.output(0);
 			output.setData(new ByteArrayInputStream(b), b.length, type);
 		}
 
@@ -220,39 +246,244 @@ public class SvcMBCProjectMigrate extends PluginService {
 		return mbcID;
 	}
 
-	private String migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, String fmpID) throws Throwable {
-		// Create the new Subject and ExMethod 
-		XmlDocMaker dm = new XmlDocMaker("args");
-		dm.add("pid", newProjectID);
-		dm.add("method", methodID);	
-		XmlDoc.Element r = executor.execute("om.pssd.subject.create", dm.root());
-		String newSubjectID = r.value("id");
-		String newExMethodID = r.value("id/@mid");
+	private String migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, 
+			String fmpSubjectID, Boolean clone, XmlWriter w) throws Throwable {
 
-		// Copy over meta-data from old to new
-		// use nig.asset.doc.copy
+		// FInd existing or create new Subject. We use mf-dicom-patient/id to find the Subject
+		String newSubjectID = findOrCreateSubject (executor, fmpSubjectID, methodID, oldSubjectID, newProjectID);
+		w.add("new-id", newSubjectID);
+		// Find the new ExMethod (it's auto created when the Subject is made)
+		Collection<String> newExMethodIDs = childrenIDs (executor, newSubjectID);
+		if (newExMethodIDs.size()>1) {
+			// This isn't possible as we only ever make one !
+			// Need to check collection before hand
+			throw new Exception ("Unhandled multiple number of ExMethods under Subject " + newSubjectID);
+		}
+		String newExMethodID = null;
+		for (String t : newExMethodIDs) {
+			newExMethodID = t;
+		}
+
 
 		// Now find the old Studies
-		dm = new XmlDocMaker("args");
-		dm.add("id", oldSubjectID);
+		XmlDocMaker dm = new XmlDocMaker("args");
+		dm.push("sort");
+		dm.add("key", "ctime");
+		dm.pop();
+		dm.add("size", "infinity");
 		dm.add("where", "model='om.pssd.study' and cid starts with '" + oldSubjectID + "'");
-		r = executor.execute("asset.query");
-		Collection<String> oldStudyIDs = r.values("id");
+		XmlDoc.Element r = executor.execute("asset.query", dm.root());
+		Collection<String> oldIDs = r.values("id");
 
-		// Iterate through Studies
-		for (String oldStudyID : oldStudyIDs) {
-			// Generate new Study
-			dm = new XmlDocMaker("args");
-			dm.add("pid", newExMethodID);
+		// No old Studies to migrate
+		if (oldIDs==null) return newSubjectID;
 
-			// Copy over meta-data from old Study
+		// Iterate through old Studies
+		for (String oldID : oldIDs) {
+			String oldStudyID = CiteableIdUtil.idToCid(executor, oldID);
 
-			// Now  clone (copy) the DataSets
+			w.push("study");
+			w.add("old-id", oldStudyID);
 
+			// Find or create the new Study
+			String newStudyID = findOrCreateStudy (executor, oldStudyID, newExMethodID, w);
 
+			// TBD Copy over meta-data from old Study to new Study
+
+			// Now  find or clone (copy) the DataSets
+			if (clone) {
+				findOrCloneDataSets (executor, oldStudyID, newStudyID, w);
+			}
+
+			// CHeck number of DataSets is correct
+			int nIn = nChildren (executor, oldStudyID, "om.pssd.dataset");
+			int nOut = nChildren (executor, newStudyID, "om.pssd.dataset");
+			w.add("datasets-in", nIn);
+			w.add("datasets-out", nOut);
+			w.pop();
 		}
 
 		return newSubjectID;
 
+	}
+
+	private String findOrCreateStudy (ServiceExecutor executor, String oldStudyID, 
+			String newExMethodID, XmlWriter w) throws Throwable {
+
+		// See if new STudy pre-exists by study UID
+		String newStudyID = null;
+		Integer nChildren = nChildren (executor, newExMethodID, "om.pssd.study");
+		if (nChildren!=0) {
+
+			// It has some children - maybe the one we want.
+			XmlDoc.Element oldStudyMeta = AssetUtil.getAsset(executor, oldStudyID, null);
+			XmlDoc.Element oldDICOM = oldStudyMeta.element("asset/meta/mf-dicom-study");
+			String uid = oldDICOM.value("uid");
+
+			XmlDocMaker dm = new XmlDocMaker("args");
+			dm.push("sort");
+			dm.add("key", "ctime");
+			dm.pop();
+			dm.add("where", "cid starts with '" + newExMethodID + "' and model='om.pssd.study' and " +
+					"xpath(mf-dicom-study/uid)='" + uid + "'");
+			XmlDoc.Element r = executor.execute("asset.query", dm.root());
+			Collection<String> ids = r.values("id");
+			if (ids!=null) {
+				if (ids.size()>1) {
+					throw new Exception("Found multiple instances of Study '"+uid+"' under ExMethod '"+newExMethodID+"'");
+				}
+
+				// Here is the good one. It may not have any DataSets...
+				if (ids.size()==1) {
+					String t =  ids.iterator().next();	
+					newStudyID = CiteableIdUtil.idToCid(executor, t);
+					w.add("new-id", new String[]{"status", "found"}, newStudyID);
+				}
+			}
+		} 
+
+		// We didn't find it so make new Study
+		if (newStudyID==null) {
+			XmlDocMaker dm = new XmlDocMaker("args");
+			dm.add("pid", newExMethodID);
+			dm.add("step", 1);
+			XmlDoc.Element r = executor.execute("om.pssd.study.create", dm.root());
+			newStudyID = r.value("id");
+			w.add("new-id", new String[]{"status", "created"}, newStudyID);
+
+			// Copy the mf-dicom-study meta-data across
+			String from = CiteableIdUtil.cidToId(executor, oldStudyID);
+			String to = CiteableIdUtil.cidToId(executor, newStudyID);
+
+			dm = new XmlDocMaker("args");
+			dm.add("action", "add");
+			dm.add("from", from);
+			dm.add("doc", new String[]{"ns", "dicom", "tag", "pssd.meta"}, "mf-dicom-study");
+			dm.add("to", new String[]{"ns", "dicom", "tag", "pssd.meta"}, to);
+			executor.execute("nig.asset.doc.copy", dm.root());
+		}
+		//
+		return newStudyID;
+	}
+
+	private void copyMetaData (ServiceExecutor executor, String cidIn, String cidOut, Collection<XmlDoc.Element> docTypes) throws Throwable {
+		String idIn = CiteableIdUtil.cidToId(executor, cidIn);
+		String idOut = CiteableIdUtil.cidToId(executor, cidOut);
+		XmlDocMaker dm = new XmlDocMaker("args");
+		for (XmlDoc.Element docType : docTypes) {
+			dm.add(docType);
+		}
+		dm.add("from", idIn);
+		dm.add("to", idOut);
+
+	}
+
+
+	private String findOrCreateSubject (ServiceExecutor executor, String fmpSubjectID, String methodID, String oldSubjectID, String newProjectID) throws Throwable {
+
+		// See if we can find the Subject pre-existing
+		XmlDocMaker dm = new XmlDocMaker("args");
+		dm.push("sort");
+		dm.add("key", "ctime");
+		dm.pop();
+		String where = "cid starts with '" + newProjectID + "' and model='om.pssd.subject' and ";
+		where += "(xpath(mf-dicom-patient/id)='"+fmpSubjectID+"')";
+		dm.add("where", where);
+		XmlDoc.Element r = executor.execute("asset.query", dm.root());
+		String newSubjectID = r.value("id");
+		if (newSubjectID!=null) {
+			return CiteableIdUtil.idToCid(executor, newSubjectID);
+		}
+
+		// Create the new Subject and ExMethod  if needed
+		dm = new XmlDocMaker("args");
+		dm.add("pid", newProjectID);
+		dm.add("method", methodID);	
+		//		dm.add("fillin", true);
+		r = executor.execute("om.pssd.subject.create", dm.root());
+		newSubjectID = r.value("id");
+
+		// Now copy meta-data across
+		String from = CiteableIdUtil.cidToId(executor, oldSubjectID);
+		String to = CiteableIdUtil.cidToId(executor, newSubjectID);
+		//
+		dm = new XmlDocMaker("args");
+		dm.add("action", "add");
+		dm.add("from", from);
+		dm.add("doc", "mf-dicom-patient");
+		dm.add("to", new String[]{"ns", "pssd.private"}, to);
+		executor.execute("nig.asset.doc.copy", dm.root());
+
+		// Now update the meta-data. We are going to replace the existing Patient ID with the FMP ID
+		dm = new XmlDocMaker("args");
+		dm.add("id", to);
+		dm.push("meta", new String[]{"action", "merge"});
+		dm.push("mf-dicom-patient", new String[]{"ns", "pssd.private"});
+		dm.add("id", fmpSubjectID);
+		dm.pop();
+		// We also transfer the FMP SUbject ID into the identity meta-data
+		dm.push("nig-daris:pssd-identity", new String[]{"ns", "pssd.public"});
+		dm.add("id", new String[]{"type", "Melbourne Brain Centre Imaging Unit"}, fmpSubjectID);
+		dm.pop();
+		//
+		dm.pop();
+		executor.execute("asset.set", dm.root());
+		//
+		return newSubjectID;
+	}
+
+
+	private void findOrCloneDataSets (ServiceExecutor executor, String oldStudyID, 
+			String newStudyID, XmlWriter w) throws Throwable {
+
+		// Find old DataSets
+		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
+
+		// Iterate and clone
+		if (oldDataSetIDs!=null) {
+			for (String oldDataSetID : oldDataSetIDs) {
+				w.push("dataset");
+				w.add("old-id", oldDataSetID);
+				// Get old asset meta-data and UID
+				XmlDoc.Element asset = AssetUtil.getAsset(executor, oldDataSetID, null);
+				String uid = asset.value("asset/meta/mf-dicom-series/uid");
+
+				// See if we can find it
+				XmlDocMaker dm = new XmlDocMaker("args");
+				dm.add("where", "cid starts with '" + newStudyID + "' and model='om.pssd.dataset' and "+
+						"xpath(mf-dicom-series/uid)='"+uid+"'");
+				XmlDoc.Element r = executor.execute("asset.query", dm.root());
+				String id = r.value("id");
+				if (id!=null) {
+					w.add("new-id", new String[]{"status", "found"}, CiteableIdUtil.idToCid(executor, id));
+				} else {
+
+					// Create new by cloning it
+					dm = new XmlDocMaker("args");
+					dm.add("id", oldDataSetID);
+					dm.add("pid", newStudyID);
+					r = executor.execute("om.pssd.dataset.clone", dm.root());		
+					w.add("new-id", new String[]{"status", "created"},r.value("id"));
+				}
+				w.pop();
+			}
+		}
+	}
+
+	Integer nChildren(ServiceExecutor executor, String cid, String model) throws Throwable {
+		XmlDocMaker dm = new XmlDocMaker("args");
+		dm.add("where", "cid starts with '" + cid + "' and model='"+model+"'");
+		dm.add("action", "count");
+		XmlDoc.Element r = executor.execute("asset.query", dm.root());
+		return Integer.parseInt(r.value("value"));
+	}
+
+
+	Collection<String> childrenIDs (ServiceExecutor executor, String cid) throws Throwable {
+		XmlDocMaker dm = new XmlDocMaker("args");
+		dm.add("id", cid);
+		dm.add("sort", "true");
+		XmlDoc.Element r = executor.execute("om.pssd.collection.member.list", dm.root());
+		return r.values("object/id");
 	}
 }
