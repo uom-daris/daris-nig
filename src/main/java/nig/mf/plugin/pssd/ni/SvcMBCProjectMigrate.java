@@ -265,7 +265,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		}
 
 
-		// Now find the old Studies
+		// Now find the  Studies to migrate
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.push("sort");
 		dm.add("key", "ctime");
@@ -278,17 +278,15 @@ public class SvcMBCProjectMigrate extends PluginService {
 		// No old Studies to migrate
 		if (oldIDs==null) return newSubjectID;
 
-		// Iterate through old Studies
+		// Iterate through the Studies
 		for (String oldID : oldIDs) {
 			String oldStudyID = CiteableIdUtil.idToCid(executor, oldID);
 
 			w.push("study");
 			w.add("old-id", oldStudyID);
 
-			// Find or create the new Study
+			// Find or create the new Study - dicom or raw
 			String newStudyID = findOrCreateStudy (executor, oldStudyID, newExMethodID, w);
-
-			// TBD Copy over meta-data from old Study to new Study
 
 			// Now  find or clone (copy) the DataSets
 			if (clone) {
@@ -310,31 +308,58 @@ public class SvcMBCProjectMigrate extends PluginService {
 	private String findOrCreateStudy (ServiceExecutor executor, String oldStudyID, 
 			String newExMethodID, XmlWriter w) throws Throwable {
 
+		// Fetch old meta-data
+		XmlDoc.Element oldStudyMeta = AssetUtil.getAsset(executor, oldStudyID, null);
+
 		// See if new STudy pre-exists by study UID
 		String newStudyID = null;
 		Integer nChildren = nChildren (executor, newExMethodID, "om.pssd.study");
+		Boolean isDICOM = false;
 		if (nChildren!=0) {
 
 			// It has some children - maybe the one we want.
-			XmlDoc.Element oldStudyMeta = AssetUtil.getAsset(executor, oldStudyID, null);
 			XmlDoc.Element oldDICOM = oldStudyMeta.element("asset/meta/mf-dicom-study");
-			String uid = oldDICOM.value("uid");
+			XmlDoc.Element oldRaw = oldStudyMeta.element("asset/meta/siemens-raw-mr-study");
+			if (oldDICOM!=null && oldRaw!=null) {
+				throw new Exception ("Study "+ oldStudyID + " holds both DICOM and Raw meta-data - this is not good");
+			}
+			isDICOM = (oldDICOM!=null);
 
-			XmlDocMaker dm = new XmlDocMaker("args");
-			dm.push("sort");
-			dm.add("key", "ctime");
-			dm.pop();
-			dm.add("where", "cid starts with '" + newExMethodID + "' and model='om.pssd.study' and " +
-					"xpath(mf-dicom-study/uid)='" + uid + "'");
-			XmlDoc.Element r = executor.execute("asset.query", dm.root());
-			Collection<String> ids = r.values("id");
-			if (ids!=null) {
-				if (ids.size()>1) {
-					throw new Exception("Found multiple instances of Study '"+uid+"' under ExMethod '"+newExMethodID+"'");
+			if (isDICOM) {
+				String uid = oldDICOM.value("uid");
+
+				// The old Study is DICOM.  Try and see if it already exists
+				// in the migrated Project
+				XmlDocMaker dm = new XmlDocMaker("args");
+				dm.add("where", "cid starts with '" + newExMethodID + "' and model='om.pssd.study' and " +
+						"xpath(mf-dicom-study/uid)='" + uid + "'");
+				XmlDoc.Element r = executor.execute("asset.query", dm.root());
+				Collection<String> ids = r.values("id");
+				if (ids!=null) {
+					if (ids.size()>1) {
+						throw new Exception("Found multiple instances of DICOM Study with uid '"+uid+"' under ExMethod '"+newExMethodID+"'");
+					}
+
+					// Here is the good one. It may not have any DataSets...
+					String t =  ids.iterator().next();	
+					newStudyID = CiteableIdUtil.idToCid(executor, t);
+					w.add("new-id", new String[]{"status", "found"}, newStudyID);
 				}
+			} else {
+				String date = oldRaw.value("date");
+				String ingestDate = oldRaw.value("ingest/date");
+				XmlDocMaker dm = new XmlDocMaker("args");
+				dm.add("where", "cid starts with '" + newExMethodID + "' and model='om.pssd.study' and " +
+						"xpath(siemens-raw-mr-study/date)='" + date + 
+						"' and xpath(siemens-raw-mr-study/ingest/date)='" + ingestDate  + "'");
+				XmlDoc.Element r = executor.execute("asset.query", dm.root());
+				Collection<String> ids = r.values("id");
+				if (ids!=null) {
+					if (ids.size()>1) {
+						throw new Exception("Found multiple instances of Raw Study with date '"+date+"' under ExMethod '"+newExMethodID+"'");
+					}
 
-				// Here is the good one. It may not have any DataSets...
-				if (ids.size()==1) {
+					// Here is the good one. It may not have any DataSets...
 					String t =  ids.iterator().next();	
 					newStudyID = CiteableIdUtil.idToCid(executor, t);
 					w.add("new-id", new String[]{"status", "found"}, newStudyID);
@@ -343,10 +368,19 @@ public class SvcMBCProjectMigrate extends PluginService {
 		} 
 
 		// We didn't find it so make new Study
+		// TBD locate the old Subject name on the Study somewhere, probably as the pssd-object/name or?
 		if (newStudyID==null) {
 			XmlDocMaker dm = new XmlDocMaker("args");
 			dm.add("pid", newExMethodID);
-			dm.add("step", 1);
+			dm.add("step", 1);                // It's always step 1 in the archive
+			String oldName = oldStudyMeta.value("asset/meta/daris:pssd-object/name");
+			String oldDescription = oldStudyMeta.value("asset/meta/daris:pssd-object/descrption");
+			if (oldName!=null) {
+				dm.add("name", oldName);
+			}
+			if (oldDescription!=null) {
+				dm.add("description", oldDescription);
+			}
 			XmlDoc.Element r = executor.execute("om.pssd.study.create", dm.root());
 			newStudyID = r.value("id");
 			w.add("new-id", new String[]{"status", "created"}, newStudyID);
@@ -358,25 +392,19 @@ public class SvcMBCProjectMigrate extends PluginService {
 			dm = new XmlDocMaker("args");
 			dm.add("action", "add");
 			dm.add("from", from);
-			dm.add("doc", new String[]{"ns", "dicom", "tag", "pssd.meta"}, "mf-dicom-study");
-			dm.add("to", new String[]{"ns", "dicom", "tag", "pssd.meta"}, to);
+			if (isDICOM) {
+				dm.add("doc", new String[]{"ns", "dicom", "tag", "pssd.meta"}, "mf-dicom-study");
+				dm.add("to", new String[]{"ns", "dicom", "tag", "pssd.meta"}, to);
+			} else {
+				dm.add("doc", new String[]{"ns", "om.pssd.study", "tag", "pssd.meta"}, "mf-dicom-study");
+				dm.add("to", new String[]{"ns", "om.pssd.study", "tag", "pssd.meta"}, to);
+			}
 			executor.execute("nig.asset.doc.copy", dm.root());
 		}
 		//
 		return newStudyID;
 	}
 
-	private void copyMetaData (ServiceExecutor executor, String cidIn, String cidOut, Collection<XmlDoc.Element> docTypes) throws Throwable {
-		String idIn = CiteableIdUtil.cidToId(executor, cidIn);
-		String idOut = CiteableIdUtil.cidToId(executor, cidOut);
-		XmlDocMaker dm = new XmlDocMaker("args");
-		for (XmlDoc.Element docType : docTypes) {
-			dm.add(docType);
-		}
-		dm.add("from", idIn);
-		dm.add("to", idOut);
-
-	}
 
 
 	private String findOrCreateSubject (ServiceExecutor executor, String fmpSubjectID, String methodID, String oldSubjectID, String newProjectID) throws Throwable {
@@ -440,25 +468,40 @@ public class SvcMBCProjectMigrate extends PluginService {
 		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
 
 		// Iterate and clone
+		// TBD update the DICOM headers so that the  patient ID = FMP ID (like the indexed meta-data)
 		if (oldDataSetIDs!=null) {
 			for (String oldDataSetID : oldDataSetIDs) {
 				w.push("dataset");
 				w.add("old-id", oldDataSetID);
 				// Get old asset meta-data and UID
 				XmlDoc.Element asset = AssetUtil.getAsset(executor, oldDataSetID, null);
-				String uid = asset.value("asset/meta/mf-dicom-series/uid");
 
-				// See if we can find it
+				XmlDoc.Element oldDICOM = asset.element("asset/meta/mf-dicom-series");
+				XmlDoc.Element oldRaw = asset.element("asset/meta/siemens-raw-mr-series");
+				if (oldDICOM!=null && oldRaw!=null) {
+					throw new Exception ("DataSet "+ oldDataSetID + " holds both DICOM and Raw meta-data - this is not good");
+				}
+				Boolean isDICOM = (oldDICOM!=null);
+
+				// See if we can find it the DataSet already migrated
 				XmlDocMaker dm = new XmlDocMaker("args");
-				dm.add("where", "cid starts with '" + newStudyID + "' and model='om.pssd.dataset' and "+
-						"xpath(mf-dicom-series/uid)='"+uid+"'");
+				if (isDICOM) {
+					String uid = oldDICOM.value("uid");
+					dm.add("where", "cid starts with '" + newStudyID + "' and model='om.pssd.dataset' and "+
+							"xpath(mf-dicom-series/uid)='"+uid+"'");
+				} else {
+					String fn = asset.value("asset/meta/daris:pssd-filename/original");
+					dm.add("where", "cid starts with '" + newStudyID + "' and model='om.pssd.dataset' and "+
+							"xpath(daris:pssd-filename/original)='"+fn+"'");
+				}
 				XmlDoc.Element r = executor.execute("asset.query", dm.root());
 				String id = r.value("id");
 				if (id!=null) {
 					w.add("new-id", new String[]{"status", "found"}, CiteableIdUtil.idToCid(executor, id));
 				} else {
 
-					// Create new by cloning it
+					// Create new by cloning it (coping all meta-data)
+					// TBD enhance clone with move option for 
 					dm = new XmlDocMaker("args");
 					dm.add("id", oldDataSetID);
 					dm.add("pid", newStudyID);
