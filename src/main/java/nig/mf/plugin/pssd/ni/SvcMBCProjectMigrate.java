@@ -120,17 +120,18 @@ public class SvcMBCProjectMigrate extends PluginService {
 		for (String subjectID : subjectIDs) {
 
 			// Fetch asset meta
-			XmlDoc.Element meta = AssetUtil.getAsset(executor(), subjectID, null);
-			XmlDoc.Element dicomMeta =  meta.element("asset/meta/mf-dicom-patient");
+			XmlDoc.Element oldSubjectMeta = AssetUtil.getAsset(executor(), subjectID, null);
+			String oldSubjectName = oldSubjectMeta.value("asset/meta/daris:pssd-object/name");
+			XmlDoc.Element oldDICOMMeta =  oldSubjectMeta.element("asset/meta/mf-dicom-patient");
 			w.push("subject");
 			w.add("old-id", subjectID);
-			w.add(dicomMeta);
+			w.add(oldDICOMMeta);
 
 			// Try to lookup in FMP or use given value
 			String fmpID2 = null;
 			if (fmpID==null) {
 				try {
-					fmpID2 = findInFMP (executor(),subjectID, mbc, dicomMeta, sb, w);
+					fmpID2 = findInFMP (executor(),subjectID, mbc, oldDICOMMeta, sb, w);
 
 					if (fmpID2!=null) {
 						w.add("found", "true");
@@ -160,7 +161,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 			// Now migrate the data for this Subject
 			if (!list) {
-				String newSubjectID = migrateSubject (executor(), newProjectID, methodID, subjectID, fmpID2, clone, w);
+				String newSubjectID = migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, clone, w);
 			}
 			//
 			w.pop();
@@ -247,7 +248,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 	}
 
 	private String migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, 
-			String fmpSubjectID, Boolean clone, XmlWriter w) throws Throwable {
+			String oldSubjectName, String fmpSubjectID, Boolean clone, XmlWriter w) throws Throwable {
 
 		// FInd existing or create new Subject. We use mf-dicom-patient/id to find the Subject
 		String newSubjectID = findOrCreateSubject (executor, fmpSubjectID, methodID, oldSubjectID, newProjectID);
@@ -286,7 +287,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 			w.add("old-id", oldStudyID);
 
 			// Find or create the new Study - dicom or raw
-			String newStudyID = findOrCreateStudy (executor, oldStudyID, newExMethodID, w);
+			String newStudyID = findOrCreateStudy (executor, oldSubjectName, oldStudyID, newExMethodID, w);
 
 			// Now  find or clone (copy) the DataSets
 			if (clone) {
@@ -305,25 +306,24 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	}
 
-	private String findOrCreateStudy (ServiceExecutor executor, String oldStudyID, 
+	private String findOrCreateStudy (ServiceExecutor executor, String oldSubjectName, String oldStudyID, 
 			String newExMethodID, XmlWriter w) throws Throwable {
 
 		// Fetch old meta-data
 		XmlDoc.Element oldStudyMeta = AssetUtil.getAsset(executor, oldStudyID, null);
+		XmlDoc.Element oldDICOM = oldStudyMeta.element("asset/meta/mf-dicom-study");
+		XmlDoc.Element oldRaw = oldStudyMeta.element("asset/meta/daris:siemens-raw-mr-study");
+		if (oldDICOM!=null && oldRaw!=null) {
+			throw new Exception ("Study "+ oldStudyID + " holds both DICOM and Raw meta-data - this is not good");
+		}
+		Boolean isDICOM = (oldDICOM!=null);
 
 		// See if new STudy pre-exists by study UID
 		String newStudyID = null;
 		Integer nChildren = nChildren (executor, newExMethodID, "om.pssd.study");
-		Boolean isDICOM = false;
 		if (nChildren!=0) {
 
 			// It has some children - maybe the one we want.
-			XmlDoc.Element oldDICOM = oldStudyMeta.element("asset/meta/mf-dicom-study");
-			XmlDoc.Element oldRaw = oldStudyMeta.element("asset/meta/siemens-raw-mr-study");
-			if (oldDICOM!=null && oldRaw!=null) {
-				throw new Exception ("Study "+ oldStudyID + " holds both DICOM and Raw meta-data - this is not good");
-			}
-			isDICOM = (oldDICOM!=null);
 
 			if (isDICOM) {
 				String uid = oldDICOM.value("uid");
@@ -346,12 +346,15 @@ public class SvcMBCProjectMigrate extends PluginService {
 					w.add("new-id", new String[]{"status", "found"}, newStudyID);
 				}
 			} else {
-				String date = oldRaw.value("date");
+				String date = oldRaw.value("date");          // Earlier scans don't have this
 				String ingestDate = oldRaw.value("ingest/date");
 				XmlDocMaker dm = new XmlDocMaker("args");
-				dm.add("where", "cid starts with '" + newExMethodID + "' and model='om.pssd.study' and " +
-						"xpath(siemens-raw-mr-study/date)='" + date + 
-						"' and xpath(siemens-raw-mr-study/ingest/date)='" + ingestDate  + "'");
+				String where =  "cid starts with '" + newExMethodID + "' and model='om.pssd.study' and " +
+						" xpath(daris:siemens-raw-mr-study/ingest/date)='" + ingestDate  + "'";
+				if (date!=null) {
+					where += " and xpath(daris:siemens-raw-mr-study/date)='" + date + "'";
+				}
+				dm.add("where", where);
 				XmlDoc.Element r = executor.execute("asset.query", dm.root());
 				Collection<String> ids = r.values("id");
 				if (ids!=null) {
@@ -368,18 +371,22 @@ public class SvcMBCProjectMigrate extends PluginService {
 		} 
 
 		// We didn't find it so make new Study
-		// TBD locate the old Subject name on the Study somewhere, probably as the pssd-object/name or?
 		if (newStudyID==null) {
 			XmlDocMaker dm = new XmlDocMaker("args");
 			dm.add("pid", newExMethodID);
 			dm.add("step", 1);                // It's always step 1 in the archive
 			String oldName = oldStudyMeta.value("asset/meta/daris:pssd-object/name");
-			String oldDescription = oldStudyMeta.value("asset/meta/daris:pssd-object/descrption");
+			String oldDescription = oldStudyMeta.value("asset/meta/daris:pssd-object/description");
 			if (oldName!=null) {
 				dm.add("name", oldName);
 			}
 			if (oldDescription!=null) {
 				dm.add("description", oldDescription);
+			}
+			
+			// Preserve the H number in Study meta-data
+			if (oldSubjectName!=null) {
+				dm.add("other-id", oldSubjectName); 
 			}
 			XmlDoc.Element r = executor.execute("om.pssd.study.create", dm.root());
 			newStudyID = r.value("id");
@@ -396,7 +403,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 				dm.add("doc", new String[]{"ns", "dicom", "tag", "pssd.meta"}, "mf-dicom-study");
 				dm.add("to", new String[]{"ns", "dicom", "tag", "pssd.meta"}, to);
 			} else {
-				dm.add("doc", new String[]{"ns", "om.pssd.study", "tag", "pssd.meta"}, "mf-dicom-study");
+				dm.add("doc", new String[]{"ns", "om.pssd.study", "tag", "pssd.meta"}, "daris:siemens-raw-mr-study");
 				dm.add("to", new String[]{"ns", "om.pssd.study", "tag", "pssd.meta"}, to);
 			}
 			executor.execute("nig.asset.doc.copy", dm.root());
@@ -477,7 +484,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 				XmlDoc.Element asset = AssetUtil.getAsset(executor, oldDataSetID, null);
 
 				XmlDoc.Element oldDICOM = asset.element("asset/meta/mf-dicom-series");
-				XmlDoc.Element oldRaw = asset.element("asset/meta/siemens-raw-mr-series");
+				XmlDoc.Element oldRaw = asset.element("asset/meta/daris:siemens-raw-mr-series");
 				if (oldDICOM!=null && oldRaw!=null) {
 					throw new Exception ("DataSet "+ oldDataSetID + " holds both DICOM and Raw meta-data - this is not good");
 				}
