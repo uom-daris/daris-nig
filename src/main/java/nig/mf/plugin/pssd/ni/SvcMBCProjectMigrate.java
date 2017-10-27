@@ -35,7 +35,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the subjects (defaults to 1).", 0, 1));
 		_defn.add(new Element("size", StringType.DEFAULT, "The number of subjects to find (defaults to all).", 0, 1));
 		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list mapping to FMP, don't migrate any data (defaults to true).", 0, 1));
-		_defn.add(new Element("clone", BooleanType.DEFAULT, "Actually clone the data-sets. If false, all objects are made to the Study level.", 0, 1));
+		_defn.add(new Element("content-clone", BooleanType.DEFAULT, "Actually clone the content of the DataSets.  If false, the DataSets are cloned but without contebt.", 0, 1));
 		_defn.add(new Element("copy-raw", BooleanType.DEFAULT, "If true, when cloning the Siemens RAW (only) DataSet copy the content.  If false, the RAW content is moved.  DICOM content is always copied.", 0, 1));
 	}
 
@@ -79,7 +79,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		String size = args.stringValue("size");
 		String idx = args.stringValue("idx");;
 		Boolean list = args.booleanValue("list-only", true);
-		Boolean clone = args.booleanValue("clone", false);
+		Boolean cloneContent = args.booleanValue("content-clone", false);
 		String fmpID = args.stringValue("fmpid");
 		Boolean copyRawContent = args.booleanValue("copy-raw",true);
 		//
@@ -167,7 +167,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 			// Now migrate the data for this Subject
 			if (!list) {
-				migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, clone, copyRawContent, w);
+				migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, cloneContent, copyRawContent, w);
 			}
 			//
 			w.pop();
@@ -301,7 +301,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 	}
 
 	private void  migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, 
-			String oldSubjectName, String fmpSubjectID, Boolean clone, Boolean copyRawContent, XmlWriter w) throws Throwable {
+			String oldSubjectName, String fmpSubjectID, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
 
 		// FInd existing or create new Subject. We use mf-dicom-patient/id to find the Subject
 		String newSubjectID = findOrCreateSubject (executor, fmpSubjectID, methodID, oldSubjectID, newProjectID);
@@ -342,10 +342,9 @@ public class SvcMBCProjectMigrate extends PluginService {
 			// Find or create the new Study - dicom or raw
 			String newStudyID = findOrCreateStudy (executor, oldSubjectName, oldStudyID, newExMethodID, w);
 
-			// Now  find or clone (copy) the DataSets
-			if (clone) {
-				findOrCloneDataSets (executor, fmpSubjectID, oldSubjectName, oldStudyID, newStudyID, copyRawContent,  w);
-			}
+			// Now  find extant or clone the DataSets
+			findOrCloneDataSets (executor, fmpSubjectID, oldSubjectName, oldStudyID, newStudyID, cloneContent, copyRawContent,  w);
+
 
 			// CHeck number of DataSets is correct
 			int nIn = nChildren (executor, oldStudyID, "om.pssd.dataset");
@@ -521,7 +520,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 
 	private void findOrCloneDataSets (ServiceExecutor executor, String fmpSubjectID, String oldSubjectName, String oldStudyID, 
-			String newStudyID, Boolean copyRawContent, XmlWriter w) throws Throwable {
+			String newStudyID, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
 
 		// Find old DataSets
 		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
@@ -565,28 +564,40 @@ public class SvcMBCProjectMigrate extends PluginService {
 					dm.add("pid", newStudyID);
 					if (isDICOM) {
 						// We always copy the content for DICOM
-						dm.add("content", "true");
+						if (cloneContent) {
+							dm.add("content", "true");
+						}
 						r = executor.execute("om.pssd.dataset.clone", dm.root());
 						String newDataSetID = r.value("id");
 
 						// Now we need to update the DICOM header because the Patient ID is changing
 						// from the Visit-based H number to the FMP generated ID
-						dm = new XmlDocMaker("args");
-						dm.add("cid", newDataSetID);
-						dm.push("element", new String[]{"action", "merge", "tag", "00100020"});
-						dm.add("value", fmpSubjectID);
-						dm.pop();
-						dm.push("element", new String[]{"action", "merge", "tag", "00080050"});
-						dm.add("value", oldSubjectName);
-						dm.pop();
-						executor.execute("daris.dicom.metadata.set", dm.root());
-						
-						// Prune DataSet version
-					} else {
+						if (cloneContent) {
+							dm = new XmlDocMaker("args");
+							dm.add("cid", newDataSetID);
+							dm.push("element", new String[]{"action", "merge", "tag", "00100020"});
+							dm.add("value", fmpSubjectID);
+							dm.pop();
+							dm.push("element", new String[]{"action", "merge", "tag", "00080050"});
+							dm.add("value", oldSubjectName);
+							dm.pop();
+							executor.execute("daris.dicom.metadata.set", dm.root());
 
-						// We may copy or move the content.  If we move, it's a 2-step process
-						if (copyRawContent) {
-							dm.add("content", "true");
+							// TBD prune DataSet
+							
+							w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
+						} else {
+							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
+						}
+
+					} else {
+						if (cloneContent) {
+							// We may copy or move the content.  If we move, it's a 2-step process
+							if (copyRawContent) {
+								dm.add("content", "true");
+							} else {
+								dm.add("content", "false");
+							}
 						} else {
 							dm.add("content", "false");
 						}
@@ -594,18 +605,22 @@ public class SvcMBCProjectMigrate extends PluginService {
 						String newDataSetID = r.value("id");
 
 						// Now move the content over as needed
-						if (!copyRawContent) {
-							String contentURL = asset.value("asset/content/url");
-							String contentType = asset.value("asset/content/type");
-							if (contentURL!=null && contentType!=null) {
-								setAssetContentUrlAndType (newDataSetID, contentURL, contentType);
-								internalizeAssetByMove (newDataSetID);
-								w.add("new-id", new String[]{"status", "created", "content", "moved"}, newDataSetID);
+						if (cloneContent) {
+							if (!copyRawContent) {
+								String contentURL = asset.value("asset/content/url");
+								String contentType = asset.value("asset/content/type");
+								if (contentURL!=null && contentType!=null) {
+									setAssetContentUrlAndType (newDataSetID, contentURL, contentType);
+									internalizeAssetByMove (newDataSetID);
+									w.add("new-id", new String[]{"status", "created", "content", "moved"}, newDataSetID);
+								} else {
+									w.add("new-id", new String[]{"status", "created", "content", "failed"}, newDataSetID);
+								}
 							} else {
-								w.add("new-id", new String[]{"status", "created", "content", "failed"}, newDataSetID);
+								w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
 							}
 						} else {
-							w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
+							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
 						}
 					}
 					w.pop();
