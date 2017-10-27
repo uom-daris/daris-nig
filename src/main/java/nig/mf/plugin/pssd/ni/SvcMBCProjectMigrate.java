@@ -25,9 +25,6 @@ public class SvcMBCProjectMigrate extends PluginService {
 	private static final String FMP_CRED_REL_PATH = "/.fmp/petct_fmpcheck";
 
 	public SvcMBCProjectMigrate() {
-
-		// matches DocType daris:pssd-repository-description
-
 		_defn = new Interface();
 		_defn.add(new Element("fmpid",StringType.DEFAULT, "A fake FMP patient ID for testing without FMP access.", 0, 1));
 		_defn.add(new Element("from", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate from.", 1, 1));
@@ -78,7 +75,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		String newProjectID = args.stringValue("to", oldProjectID);
 		String size = args.stringValue("size");
 		String idx = args.stringValue("idx");;
-		Boolean list = args.booleanValue("list-only", true);
+		Boolean listOnly = args.booleanValue("list-only", true);
 		Boolean cloneContent = args.booleanValue("clone-content", false);
 		String fmpID = args.stringValue("fmpid");
 		Boolean copyRawContent = args.booleanValue("copy-raw",true);
@@ -166,7 +163,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 			sb.append("\n");
 
 			// Now migrate the data for this Subject
-			if (!list) {
+			if (!listOnly) {
 				migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, cloneContent, copyRawContent, w);
 			}
 			//
@@ -526,7 +523,6 @@ public class SvcMBCProjectMigrate extends PluginService {
 		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
 
 		// Iterate and clone
-		// TBD update the DICOM headers so that the  patient ID = FMP ID (like the indexed meta-data)
 		if (oldDataSetIDs!=null) {
 			for (String oldDataSetID : oldDataSetIDs) {
 				w.push("dataset");
