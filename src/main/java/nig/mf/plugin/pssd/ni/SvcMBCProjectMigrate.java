@@ -35,7 +35,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the subjects (defaults to 1).", 0, 1));
 		_defn.add(new Element("size", StringType.DEFAULT, "The number of subjects to find (defaults to all).", 0, 1));
 		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list mapping to FMP, don't migrate any data (defaults to true).", 0, 1));
-		_defn.add(new Element("content-clone", BooleanType.DEFAULT, "Actually clone the content of the DataSets.  If false, the DataSets are cloned but without contebt.", 0, 1));
+		_defn.add(new Element("clone-content", BooleanType.DEFAULT, "Actually clone the content of the DataSets.  If false, the DataSets are cloned but without contebt.", 0, 1));
 		_defn.add(new Element("copy-raw", BooleanType.DEFAULT, "If true, when cloning the Siemens RAW (only) DataSet copy the content.  If false, the RAW content is moved.  DICOM content is always copied.", 0, 1));
 	}
 
@@ -79,7 +79,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		String size = args.stringValue("size");
 		String idx = args.stringValue("idx");;
 		Boolean list = args.booleanValue("list-only", true);
-		Boolean cloneContent = args.booleanValue("content-clone", false);
+		Boolean cloneContent = args.booleanValue("clone-content", false);
 		String fmpID = args.stringValue("fmpid");
 		Boolean copyRawContent = args.booleanValue("copy-raw",true);
 		//
