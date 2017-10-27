@@ -36,6 +36,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		_defn.add(new Element("size", StringType.DEFAULT, "The number of subjects to find (defaults to all).", 0, 1));
 		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list mapping to FMP, don't migrate any data (defaults to true).", 0, 1));
 		_defn.add(new Element("clone", BooleanType.DEFAULT, "Actually clone the data-sets. If false, all objects are made to the Study level.", 0, 1));
+		_defn.add(new Element("copy-raw", BooleanType.DEFAULT, "If true, when cloning the Siemens RAW (only) DataSet copy the content.  If false, the RAW content is moved.  DICOM content is always copied.", 0, 1));
 	}
 
 	public String name() {
@@ -80,6 +81,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		Boolean list = args.booleanValue("list-only", true);
 		Boolean clone = args.booleanValue("clone", false);
 		String fmpID = args.stringValue("fmpid");
+		Boolean copyRawContent = args.booleanValue("copy-raw",true);
 		//
 		XmlDoc.Element projectMeta = AssetUtil.getAsset(executor(), oldProjectID, null);
 		String methodID = projectMeta.value("asset/meta/daris:pssd-project/method/id");
@@ -152,8 +154,12 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 			// If we didn't find  the Subject in FMP proceed
 			if (fmpID2==null) {
-				// Create FMP entry
 				throw new Exception ("No FMP ID");
+				// Create FMP entry
+				/*				
+				createPatientInFMP (oldDICOMMeta, mbc);
+				fmpID2 = findInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
+				 */
 			}
 
 			// Proceed now we have a FMP SUbject ID one way or the other
@@ -161,7 +167,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 			// Now migrate the data for this Subject
 			if (!list) {
-				String newSubjectID = migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, clone, w);
+				migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, clone, copyRawContent, w);
 			}
 			//
 			w.pop();
@@ -182,12 +188,58 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	}
 
+	private void createPatientInFMP (XmlDoc.Element dicomMeta, MBCFMP mbc) throws Throwable {
+		DICOMPatient dp = new DICOMPatient(dicomMeta);	
+
+		// Remove single quotes from names
+		String fn = dp.getFirstName();	
+		if (fn!=null) {
+			fn = dp.getFirstName().replaceAll("'","");
+		}
+		String ln = dp.getLastName();
+		if (ln!=null) {
+			ln = dp.getLastName().replaceAll("'", "");
+		}
+		//
+		String sex = dp.getSex();
+		//
+		Date dob = dp.getDOB();
+		String dob2 = null;
+		if (dob!=null) {
+			dob2 = DateUtil.formatDate(dob, "dd/MM/yyyy");
+		}
+
+		if (fn!=null && ln!=null && dp.getSex()!=null && dp.getDOB()!=null) {
+			// Convert to FMP form
+			String sex2 = sex;
+			if (sex!=null) {
+				if (sex.equalsIgnoreCase("male")) {
+					sex2 = "M";
+				} else if (sex.equalsIgnoreCase("female")) {
+					sex2 = "F";
+				} else {
+					sex2 = "Other";
+				}
+			}
+
+			//			mbc.createPatient(ln, fn, sex2, dob2);
+
+		}
+	}
+
 	private String findInFMP (ServiceExecutor executor, String cid, MBCFMP mbc, XmlDoc.Element dicomMeta, StringBuilder sb, XmlWriter w) throws Throwable {
 		String mbcID = null;
 
 		// Parse meta-data
 		DICOMPatient dp = new DICOMPatient(dicomMeta);	
 		//
+
+		// The convention in FMP is to NOT have single quotes in names like O'Connor.
+		// So remove any
+		/*
+		String ln =  StringUtil.escapeSingleQuotes(dp.getLastName());
+		String fn = StringUtil.escapeSingleQuotes(dp.getFirstName());
+		 */
 		String fn = dp.getFirstName();
 		if (fn!=null) {
 			fn = dp.getFirstName().replaceAll("'",  "");
@@ -219,36 +271,37 @@ public class SvcMBCProjectMigrate extends PluginService {
 				}
 			}
 
-
-			// The convention in FMP is to NOT have single quotes in names like O'Connor.
-			// So remove any
-			/*
-			String ln =  StringUtil.escapeSingleQuotes(dp.getLastName());
-			String fn = StringUtil.escapeSingleQuotes(dp.getFirstName());
-			 */
 			mbcID = mbc.findPatient(fn, ln, sex2, dp.getDOB());
 			//
-			sb.append(cid).append(",").append(fn).append(",").append(ln).append(",").append(sex).append(",").append(dob2);
+			if (sb!=null) {
+				sb.append(cid).append(",").append(fn).append(",").append(ln).append(",").append(sex).append(",").append(dob2);
+			}
 
 		} else {
-			w.add("dicomMeta", "incomplete");
-			w.add("first", dp.getFirstName());
-			w.add("last", dp.getLastName());
-			w.add("sex", dp.getSex());
-			w.add("dob", dp.getDOB());
-			sb.append(cid).append(",").append(fn).append(",").append(ln).append(",").append(sex).append(",").append(dob2);
+			if (w!=null) {
+				w.add("dicomMeta", "incomplete");
+				w.add("first", dp.getFirstName());
+				w.add("last", dp.getLastName());
+				w.add("sex", dp.getSex());
+				w.add("dob", dp.getDOB());
+			}
+			if (sb!=null) {
+				sb.append(cid).append(",").append(fn).append(",").append(ln).append(",").append(sex).append(",").append(dob2);
+			}
 		}
-		if (mbcID!=null) {
-			sb.append(",").append(mbcID);
-		} else {
-			sb.append(",").append("not-found");
+		if (sb!=null) {
+			if (mbcID!=null) {
+				sb.append(",").append(mbcID);
+			} else {
+				sb.append(",").append("not-found");
+			}
 		}
 		//
 		return mbcID;
 	}
 
-	private String migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, 
-			String oldSubjectName, String fmpSubjectID, Boolean clone, XmlWriter w) throws Throwable {
+	private void  migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, 
+			String oldSubjectName, String fmpSubjectID, Boolean clone, Boolean copyRawContent, XmlWriter w) throws Throwable {
 
 		// FInd existing or create new Subject. We use mf-dicom-patient/id to find the Subject
 		String newSubjectID = findOrCreateSubject (executor, fmpSubjectID, methodID, oldSubjectID, newProjectID);
@@ -277,7 +330,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		Collection<String> oldIDs = r.values("id");
 
 		// No old Studies to migrate
-		if (oldIDs==null) return newSubjectID;
+		if (oldIDs==null) return;
 
 		// Iterate through the Studies
 		for (String oldID : oldIDs) {
@@ -291,7 +344,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 			// Now  find or clone (copy) the DataSets
 			if (clone) {
-				findOrCloneDataSets (executor, oldStudyID, newStudyID, w);
+				findOrCloneDataSets (executor, fmpSubjectID, oldSubjectName, oldStudyID, newStudyID, copyRawContent,  w);
 			}
 
 			// CHeck number of DataSets is correct
@@ -302,7 +355,6 @@ public class SvcMBCProjectMigrate extends PluginService {
 			w.pop();
 		}
 
-		return newSubjectID;
 
 	}
 
@@ -383,7 +435,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 			if (oldDescription!=null) {
 				dm.add("description", oldDescription);
 			}
-			
+
 			// Preserve the H number in Study meta-data
 			if (oldSubjectName!=null) {
 				dm.add("other-id", oldSubjectName); 
@@ -468,8 +520,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 	}
 
 
-	private void findOrCloneDataSets (ServiceExecutor executor, String oldStudyID, 
-			String newStudyID, XmlWriter w) throws Throwable {
+	private void findOrCloneDataSets (ServiceExecutor executor, String fmpSubjectID, String oldSubjectName, String oldStudyID, 
+			String newStudyID, Boolean copyRawContent, XmlWriter w) throws Throwable {
 
 		// Find old DataSets
 		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
@@ -508,17 +560,81 @@ public class SvcMBCProjectMigrate extends PluginService {
 				} else {
 
 					// Create new by cloning it (coping all meta-data)
-					// TBD enhance clone with move option for 
 					dm = new XmlDocMaker("args");
 					dm.add("id", oldDataSetID);
 					dm.add("pid", newStudyID);
-					r = executor.execute("om.pssd.dataset.clone", dm.root());		
-					w.add("new-id", new String[]{"status", "created"},r.value("id"));
+					if (isDICOM) {
+						// We always copy the content for DICOM
+						dm.add("content", "true");
+						r = executor.execute("om.pssd.dataset.clone", dm.root());
+						String newDataSetID = r.value("id");
+
+						// Now we need to update the DICOM header because the Patient ID is changing
+						// from the Visit-based H number to the FMP generated ID
+						dm = new XmlDocMaker("args");
+						dm.add("cid", newDataSetID);
+						dm.push("element", new String[]{"action", "merge", "tag", "00100020"});
+						dm.add("value", fmpSubjectID);
+						dm.pop();
+						dm.push("element", new String[]{"action", "merge", "tag", "00080050"});
+						dm.add("value", oldSubjectName);
+						dm.pop();
+						executor.execute("daris.dicom.metadata.set", dm.root());
+						
+						// Prune DataSet version
+					} else {
+
+						// We may copy or move the content.  If we move, it's a 2-step process
+						if (copyRawContent) {
+							dm.add("content", "true");
+						} else {
+							dm.add("content", "false");
+						}
+						r = executor.execute("om.pssd.dataset.clone", dm.root());		
+						String newDataSetID = r.value("id");
+
+						// Now move the content over as needed
+						if (!copyRawContent) {
+							String contentURL = asset.value("asset/content/url");
+							String contentType = asset.value("asset/content/type");
+							if (contentURL!=null && contentType!=null) {
+								setAssetContentUrlAndType (newDataSetID, contentURL, contentType);
+								internalizeAssetByMove (newDataSetID);
+								w.add("new-id", new String[]{"status", "created", "content", "moved"}, newDataSetID);
+							} else {
+								w.add("new-id", new String[]{"status", "created", "content", "failed"}, newDataSetID);
+							}
+						} else {
+							w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
+						}
+					}
+					w.pop();
 				}
-				w.pop();
 			}
 		}
 	}
+
+
+
+	private void setAssetContentUrlAndType(String cid, String contentUrl, String contentType) throws Throwable {
+
+		// asset.set :cid $cid :url -by reference $url
+		XmlDocMaker doc = new XmlDocMaker("args");
+		doc.add("cid", cid);
+		doc.add("url", new String[] { "by", "reference" }, contentUrl);
+		doc.add("ctype", contentType);
+		executor().execute("asset.set", doc.root());
+	}
+
+
+	private void internalizeAssetByMove (String cid) throws Throwable {
+
+		XmlDocMaker doc = new XmlDocMaker("args");
+		doc.add("cid", cid);
+		doc.add("method", "move");
+		executor().execute("asset.internalize", doc.root());
+	}
+
 
 	Integer nChildren(ServiceExecutor executor, String cid, String model) throws Throwable {
 		XmlDocMaker dm = new XmlDocMaker("args");
