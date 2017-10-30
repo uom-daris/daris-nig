@@ -10,6 +10,7 @@ import nig.mf.plugin.util.AssetUtil;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
 import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
+import arc.mf.plugin.PluginTask;
 import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.PluginService.Interface.Element;
 import arc.mf.plugin.dtype.BooleanType;
@@ -66,6 +67,11 @@ public class SvcMBCProjectMigrate extends PluginService {
 	public int maxNumberOfOutputs() {
 		return 1;
 	}
+	
+	public boolean canBeAborted() {
+
+		return true;
+	}
 
 	public void execute(XmlDoc.Element args, Inputs inputs, Outputs outputs, XmlWriter w)
 			throws Throwable {
@@ -117,6 +123,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		sb.append("DaRIS ID").append(",").append("first name").append(",").append("last name").append(",").append("sex").append(",").append("dob").append(",").append("FMP ID").append("\n");
 		Collection<String> subjectIDs = r.values("object/id");
 		for (String subjectID : subjectIDs) {
+			PluginTask.checkIfThreadTaskAborted();
 
 			// Fetch asset meta
 			XmlDoc.Element oldSubjectMeta = AssetUtil.getAsset(executor(), subjectID, null);
@@ -300,6 +307,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	private void  migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, 
 			String oldSubjectName, String fmpSubjectID, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
+		PluginTask.checkIfThreadTaskAborted();
 
 		// FInd existing or create new Subject. We use mf-dicom-patient/id to find the Subject
 		String newSubjectID = findOrCreateSubject (executor, fmpSubjectID, methodID, oldSubjectID, newProjectID);
@@ -332,6 +340,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 		// Iterate through the Studies
 		for (String oldID : oldIDs) {
+			PluginTask.checkIfThreadTaskAborted();
+
 			String oldStudyID = CiteableIdUtil.idToCid(executor, oldID);
 
 			w.push("study");
@@ -357,6 +367,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	private String findOrCreateStudy (ServiceExecutor executor, String oldSubjectName, String oldStudyID, 
 			String newExMethodID, XmlWriter w) throws Throwable {
+		PluginTask.checkIfThreadTaskAborted();
 
 		// Fetch old meta-data
 		XmlDoc.Element oldStudyMeta = AssetUtil.getAsset(executor, oldStudyID, null);
@@ -420,10 +431,12 @@ public class SvcMBCProjectMigrate extends PluginService {
 		} 
 
 		// We didn't find it so make new Study
+		PluginTask.checkIfThreadTaskAborted();
 		if (newStudyID==null) {
 			XmlDocMaker dm = new XmlDocMaker("args");
 			dm.add("pid", newExMethodID);
 			dm.add("step", 1);                // It's always step 1 in the archive
+			dm.add("fillin", "true");
 			String oldName = oldStudyMeta.value("asset/meta/daris:pssd-object/name");
 			String oldDescription = oldStudyMeta.value("asset/meta/daris:pssd-object/description");
 			if (oldName!=null) {
@@ -483,7 +496,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		dm = new XmlDocMaker("args");
 		dm.add("pid", newProjectID);
 		dm.add("method", methodID);	
-		//		dm.add("fillin", true);
+		dm.add("fillin", true);
 		r = executor.execute("om.pssd.subject.create", dm.root());
 		newSubjectID = r.value("id");
 
@@ -519,6 +532,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	private void findOrCloneDataSets (ServiceExecutor executor, String fmpSubjectID, String oldSubjectName, String oldStudyID, 
 			String newStudyID, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
+		PluginTask.checkIfThreadTaskAborted();
 
 		// Find old DataSets
 		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
@@ -526,6 +540,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 		// Iterate and clone
 		if (oldDataSetIDs!=null) {
 			for (String oldDataSetID : oldDataSetIDs) {
+				PluginTask.checkIfThreadTaskAborted();
+
 				w.push("dataset");
 				w.add("old-id", oldDataSetID);
 				// Get old asset meta-data and UID
@@ -559,6 +575,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 					dm = new XmlDocMaker("args");
 					dm.add("id", oldDataSetID);
 					dm.add("pid", newStudyID);
+					dm.add("fillin", "true");
 					if (isDICOM) {
 						if (cloneContent) {
 							dm.add("content", "true");
@@ -573,9 +590,11 @@ public class SvcMBCProjectMigrate extends PluginService {
 						if (cloneContent) {
 							dm = new XmlDocMaker("args");
 							dm.add("cid", newDataSetID);
+							// Write FMP subject ID into Patient ID
 							dm.push("element", new String[]{"action", "merge", "tag", "00100020"});
 							dm.add("value", fmpSubjectID);
 							dm.pop();
+							// Write the H number into Accession Number
 							dm.push("element", new String[]{"action", "merge", "tag", "00080050"});
 							dm.add("value", oldSubjectName);
 							dm.pop();
