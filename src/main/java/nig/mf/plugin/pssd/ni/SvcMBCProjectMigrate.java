@@ -32,8 +32,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the subjects (defaults to 1).", 0, 1));
 		_defn.add(new Element("size", StringType.DEFAULT, "The number of subjects to find (defaults to all).", 0, 1));
 		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list mapping to FMP, don't migrate any data (defaults to true).", 0, 1));
-		_defn.add(new Element("clone-content", BooleanType.DEFAULT, "Actually clone the content of the DataSets.  If false, the DataSets are cloned but without contebt.", 0, 1));
-		_defn.add(new Element("copy-raw", BooleanType.DEFAULT, "If true, when cloning the Siemens RAW (only) DataSet copy the content.  If false, the RAW content is moved.  DICOM content is always copied.", 0, 1));
+		_defn.add(new Element("clone-content", BooleanType.DEFAULT, "Actually clone the content of the DataSets.  If false (the default), the DataSets are cloned but without content.", 0, 1));
+		_defn.add(new Element("copy-raw", BooleanType.DEFAULT, "If true (default), when cloning the Siemens RAW (only) DataSet copy the content.  If false, the RAW content is moved.  DICOM content is always copied.", 0, 1));
 	}
 
 	public String name() {
@@ -149,22 +149,23 @@ public class SvcMBCProjectMigrate extends PluginService {
 				w.add("fmpPatientID", fmpID2);				
 			}
 
-			// If we didn't find  the Subject in FMP proceed
+			// If we didn't find  the Subject in FMP proceed to make it
 			if (fmpID2==null) {
-				throw new Exception ("No FMP ID");
+				//				throw new Exception ("No FMP ID");
 				// Create FMP entry
 				/*				
 				createPatientInFMP (oldDICOMMeta, mbc);
 				fmpID2 = findInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
 				 */
-			}
+			} else {
 
-			// Proceed now we have a FMP SUbject ID one way or the other
-			sb.append("\n");
+				// Proceed now we have a FMP SUbject ID one way or the other
+				sb.append("\n");
 
-			// Now migrate the data for this Subject
-			if (!listOnly) {
-				migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, cloneContent, copyRawContent, w);
+				// Now migrate the data for this Subject
+				if (!listOnly) {
+					migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, cloneContent, copyRawContent, w);
+				}
 			}
 			//
 			w.pop();
@@ -559,9 +560,10 @@ public class SvcMBCProjectMigrate extends PluginService {
 					dm.add("id", oldDataSetID);
 					dm.add("pid", newStudyID);
 					if (isDICOM) {
-						// We always copy the content for DICOM
 						if (cloneContent) {
 							dm.add("content", "true");
+						} else {
+							dm.add("content", "false");						
 						}
 						r = executor.execute("om.pssd.dataset.clone", dm.root());
 						String newDataSetID = r.value("id");
@@ -580,7 +582,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 							executor.execute("daris.dicom.metadata.set", dm.root());
 
 							// TBD prune DataSet
-							
+
 							w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
 						} else {
 							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
@@ -588,7 +590,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 					} else {
 						if (cloneContent) {
-							// We may copy or move the content.  If we move, it's a 2-step process
+							// If we clone the raw datset content, we may copy or move the content. 
+							// If we move, it's a 2-step process
 							if (copyRawContent) {
 								dm.add("content", "true");
 							} else {
@@ -619,8 +622,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
 						}
 					}
-					w.pop();
 				}
+				w.pop();
 			}
 		}
 	}
