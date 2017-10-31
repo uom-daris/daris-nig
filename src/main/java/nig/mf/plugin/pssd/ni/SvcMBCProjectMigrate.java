@@ -1,6 +1,7 @@
 package nig.mf.plugin.pssd.ni;
 
 import java.io.ByteArrayInputStream;
+import java.sql.ResultSet;
 import java.util.Collection;
 import java.util.Date;
 
@@ -20,6 +21,20 @@ import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
+
+/**
+ * Finds the SUbject in FMP or creates a new FMP Patient record (auto allocates Patient ID)
+ * FInds the Visit (Study) in FMP or creates a new FMP 7T visit record (all have 7T Study type 'other')
+ *      which auto allocates the visit ID
+ * The name of new Subjects is set to the FMP patient ID for convenience (also stored elsewhere)
+ * The FMP visit ID is stored in daris:pssd-study/other-id
+ * The old H numbers (in the Subject name) are also stored on Studies in daris:pssd-study/other-id
+ * The DICOM Patient ID element is set to the FMP patient ID
+ * The DICOM AccessionNumber is set to the FMP Visit ID
+ * 
+ * @author nebk
+ *
+ */
 public class SvcMBCProjectMigrate extends PluginService {
 
 	private Interface _defn;
@@ -30,11 +45,12 @@ public class SvcMBCProjectMigrate extends PluginService {
 		_defn.add(new Element("fmpid",StringType.DEFAULT, "A fake FMP patient ID for testing without FMP access.", 0, 1));
 		_defn.add(new Element("from", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate from.", 1, 1));
 		_defn.add(new Element("to", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate to. Defaults to 'to'", 0, 1));
-		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the subjects (defaults to 1).", 0, 1));
+		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the first subject to consider (defaults to 1).", 0, 1));
 		_defn.add(new Element("size", StringType.DEFAULT, "The number of subjects to find (defaults to all).", 0, 1));
 		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list mapping to FMP, don't migrate any data (defaults to true).", 0, 1));
 		_defn.add(new Element("clone-content", BooleanType.DEFAULT, "Actually clone the content of the DataSets.  If false (the default), the DataSets are cloned but without content.", 0, 1));
 		_defn.add(new Element("copy-raw", BooleanType.DEFAULT, "If true (default), when cloning the Siemens RAW (only) DataSet copy the content.  If false, the RAW content is moved.  DICOM content is always copied.", 0, 1));
+		_defn.add(new Element("do-fmp", BooleanType.DEFAULT, "If true created Patient and Visit records in FMP. Default is false. If false, and if the subject is not found in FMP, it won't make a pateint and it won't proceed further for that Subject (it can't).", 0, 1));
 	}
 
 	public String name() {
@@ -67,7 +83,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 	public int maxNumberOfOutputs() {
 		return 1;
 	}
-	
+
 	public boolean canBeAborted() {
 
 		return true;
@@ -85,6 +101,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		Boolean cloneContent = args.booleanValue("clone-content", false);
 		String fmpID = args.stringValue("fmpid");
 		Boolean copyRawContent = args.booleanValue("copy-raw",true);
+		Boolean doFMP = args.booleanValue("do-fmp",false);
 		//
 		XmlDoc.Element projectMeta = AssetUtil.getAsset(executor(), oldProjectID, null);
 		String methodID = projectMeta.value("asset/meta/daris:pssd-project/method/id");
@@ -112,7 +129,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		String type = "text/csv";
 		StringBuilder sb = new StringBuilder();
 
-		// Fetch the visit-based Subjects from the DaRIS project
+		// Fetch the Subjects in the old archive project (visit based)
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.add("id", oldProjectID);
 		if (idx!=null) {
@@ -137,49 +154,51 @@ public class SvcMBCProjectMigrate extends PluginService {
 			w.push("subject");
 			w.add("old-id", subjectID);
 			w.add(oldDICOMMeta);
+			w.push("fmp");
 
-			// Try to lookup in FMP or use given value
+			// Try to lookup in FMP or use given value for single shot testing
 			String fmpID2 = null;
-			if (fmpID==null) {
-				try {
+			try {
+				if (fmpID==null) {
 					fmpID2 = findInFMP (executor(),subjectID, mbc, oldDICOMMeta, sb, w);
 
 					if (fmpID2!=null) {
 						w.add("found", "true");
-						w.add("fmpPatientID", fmpID2);
+						w.add("patient-id", fmpID2);
 					} else {
 						w.add("found", "false");
 						// Create new Patient Record in FMP
+						if (doFMP) {
+							w.add("patient-id", fmpID2);
+							createPatientInFMP (oldDICOMMeta, mbc);
+							fmpID2 = findInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
+							w.add("created", "true");
+						} else {
+							w.add("created", "false");
+						}
+						w.pop();
 					}
-
-				} catch (Throwable t) {
-					w.add("FMPerror", t.getMessage());
+				} else {
+					fmpID2 = fmpID;
+					w.add("found", "ID-given");
+					w.add("patient-id", fmpID2);	
+					w.pop();
 				}
-			} else {
-				fmpID2 = fmpID;
-				w.add("found", "true");
-				w.add("fmpPatientID", fmpID2);				
-			}
-
-			// If we didn't find  the Subject in FMP proceed to make it
-			if (fmpID2==null) {
-				//				throw new Exception ("No FMP ID");
-				// Create FMP entry
-				/*				
-				createPatientInFMP (oldDICOMMeta, mbc);
-				fmpID2 = findInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
-				 */
-			} else {
 
 				// Proceed now we have a FMP SUbject ID one way or the other
-				sb.append("\n");
+				if (fmpID2!=null) {
+					sb.append("\n");
 
-				// Now migrate the data for this Subject
-				if (!listOnly) {
-					migrateSubject (executor(), newProjectID, methodID, subjectID, oldSubjectName, fmpID2, cloneContent, copyRawContent, w);
+					// Now migrate the data for this Subject
+					if (!listOnly) {
+						migrateSubject (executor(), mbc, newProjectID, methodID, subjectID, oldSubjectName, fmpID2, cloneContent, copyRawContent, w);
+					}
 				}
+
+			} catch (Throwable t) {
+				w.add("error", t.getMessage());
+				w.pop();
 			}
-			//
 			w.pop();
 		}
 
@@ -198,6 +217,10 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	}
 
+
+
+
+
 	private void createPatientInFMP (XmlDoc.Element dicomMeta, MBCFMP mbc) throws Throwable {
 		DICOMPatient dp = new DICOMPatient(dicomMeta);	
 
@@ -214,10 +237,6 @@ public class SvcMBCProjectMigrate extends PluginService {
 		String sex = dp.getSex();
 		//
 		Date dob = dp.getDOB();
-		String dob2 = null;
-		if (dob!=null) {
-			dob2 = DateUtil.formatDate(dob, "dd/MM/yyyy");
-		}
 
 		if (fn!=null && ln!=null && dp.getSex()!=null && dp.getDOB()!=null) {
 			// Convert to FMP form
@@ -232,7 +251,10 @@ public class SvcMBCProjectMigrate extends PluginService {
 				}
 			}
 
-			//			mbc.createPatient(ln, fn, sex2, dob2);
+			System.out.println("name=" + fn + " " + ln);
+			System.out.println("sex="+sex2);
+			System.out.println("dob="+dob);
+			mbc.createPatient(fn, ln, sex2, dob);
 
 		}
 	}
@@ -268,7 +290,9 @@ public class SvcMBCProjectMigrate extends PluginService {
 		}
 
 		if (fn!=null && ln!=null && dp.getSex()!=null && dp.getDOB()!=null) {
-			w.add("dicomMeta", "complete");
+			if (w!=null) {
+				w.add("dicomMeta", "complete");
+			}
 			// Convert to FMP form
 			String sex2 = sex;
 			if (sex!=null) {
@@ -310,7 +334,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		return mbcID;
 	}
 
-	private void  migrateSubject (ServiceExecutor executor,  String newProjectID, String methodID, String oldSubjectID, 
+	private void  migrateSubject (ServiceExecutor executor,  MBCFMP mbc, String newProjectID, String methodID, String oldSubjectID, 
 			String oldSubjectName, String fmpSubjectID, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
 		PluginTask.checkIfThreadTaskAborted();
 
@@ -352,11 +376,15 @@ public class SvcMBCProjectMigrate extends PluginService {
 			w.push("study");
 			w.add("old-id", oldStudyID);
 
+			// Create a visit record in FMP if needed.
+			String fmpVisitID = findOrCreate7TFMPVisit (executor, mbc, fmpSubjectID, oldStudyID, w);
+
 			// Find or create the new Study - dicom or raw
-			String newStudyID = findOrCreateStudy (executor, oldSubjectName, oldStudyID, newExMethodID, w);
+			String newStudyID = findOrCreateStudy (executor, oldSubjectName, oldStudyID, newExMethodID, fmpVisitID, w);
+
 
 			// Now  find extant or clone the DataSets
-			findOrCloneDataSets (executor, fmpSubjectID, oldSubjectName, oldStudyID, newStudyID, cloneContent, copyRawContent,  w);
+			findOrCloneDataSets (executor, fmpSubjectID, fmpVisitID, oldStudyID, newStudyID, cloneContent, copyRawContent,  w);
 
 
 			// CHeck number of DataSets is correct
@@ -366,12 +394,51 @@ public class SvcMBCProjectMigrate extends PluginService {
 			w.add("datasets-out", nOut);
 			w.pop();
 		}
-
-
 	}
 
+
+	private String findOrCreate7TFMPVisit  (ServiceExecutor executor, MBCFMP mbc, String fmpSubjectID, String oldStudyID, XmlWriter w) throws Throwable {
+		XmlDoc.Element oldStudyMeta = AssetUtil.getAsset(executor, oldStudyID, null);
+		XmlDoc.Element oldDICOM = oldStudyMeta.element("asset/meta/mf-dicom-study");
+		XmlDoc.Element oldRaw = oldStudyMeta.element("asset/meta/daris:siemens-raw-mr-study");
+
+		String visitID = null;
+		Date vdate = null;
+		if (oldDICOM != null) {
+			vdate = oldDICOM.dateValue("sdate");
+		} else if (oldRaw!=null) {
+			vdate = oldRaw.dateValue("date");
+
+			// TBD retro fit all raw Studies with the date
+
+		}
+
+		// Find visit by subject ID and date
+		// NB the raw date may not be the same as the acquisution date
+		// TBD exract date for all raw data first
+		visitID = mbc.find7TVisit (fmpSubjectID, vdate);
+		if (visitID==null) {
+			visitID = mbc.create7TVisit(fmpSubjectID, vdate);
+			w.push("fmp");
+			w.add("visit-id", new String[]{"status", "created"}, visitID);
+			w.add("id", fmpSubjectID);
+			w.add("date", vdate);
+			w.pop();
+		} else {
+			w.push("fmp");
+			w.add("visit-id", new String[]{"status", "found"}, visitID);
+			w.add("id", fmpSubjectID);
+			w.add("date", vdate);
+			w.pop();		
+		}
+		return visitID;
+	}
+
+
+
+
 	private String findOrCreateStudy (ServiceExecutor executor, String oldSubjectName, String oldStudyID, 
-			String newExMethodID, XmlWriter w) throws Throwable {
+			String newExMethodID, String fmpVisitID, XmlWriter w) throws Throwable {
 		PluginTask.checkIfThreadTaskAborted();
 
 		// Fetch old meta-data
@@ -411,6 +478,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 					w.add("new-id", new String[]{"status", "found"}, newStudyID);
 				}
 			} else {
+				// TBD retro fit date on all raw data
 				String date = oldRaw.value("date");          // Earlier scans don't have this
 				String ingestDate = oldRaw.value("ingest/date");
 				XmlDocMaker dm = new XmlDocMaker("args");
@@ -450,6 +518,12 @@ public class SvcMBCProjectMigrate extends PluginService {
 			if (oldDescription!=null) {
 				dm.add("description", oldDescription);
 			}
+
+			// TBD - add a type for the pssd-study/other-id : values could be
+			// "Melbourne Brain Centre Imaging Unit" and "Melbourne Brain Centre Imaging Unit 7T Legacy" 
+			// 
+			// Add the new visit ID onto the Study
+			dm.add("other-id", fmpVisitID);
 
 			// Preserve the H number in Study meta-data
 			if (oldSubjectName!=null) {
@@ -536,7 +610,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 	}
 
 
-	private void findOrCloneDataSets (ServiceExecutor executor, String fmpSubjectID, String oldSubjectName, String oldStudyID, 
+	private void findOrCloneDataSets (ServiceExecutor executor, String fmpSubjectID, String fmpVisitID, String oldStudyID, 
 			String newStudyID, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
 		PluginTask.checkIfThreadTaskAborted();
 
@@ -600,9 +674,9 @@ public class SvcMBCProjectMigrate extends PluginService {
 							dm.push("element", new String[]{"action", "merge", "tag", "00100020"});
 							dm.add("value", fmpSubjectID);
 							dm.pop();
-							// Write the H number into Accession Number
+							// Write the FMP visit ID into the Accession Number
 							dm.push("element", new String[]{"action", "merge", "tag", "00080050"});
-							dm.add("value", oldSubjectName);
+							dm.add("value", fmpVisitID);
 							dm.pop();
 							executor.execute("daris.dicom.metadata.set", dm.root());
 
