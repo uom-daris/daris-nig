@@ -5,7 +5,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.Vector;
 
-import mbc.FMP.MBCFMP;
+import mbciu.mbc.MBCFMP;
 import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.util.AssetUtil;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;

@@ -4,7 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.util.Collection;
 import java.util.Date;
 
-import mbc.FMP.MBCFMP;
+import mbciu.mbc.MBCFMP;
 import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.util.AssetUtil;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
@@ -23,7 +23,7 @@ import arc.xml.XmlWriter;
 public class SvcMBCProjectMigrate extends PluginService {
 
 	private Interface _defn;
-	private static final String FMP_CRED_REL_PATH = "/.fmp/petct_fmpcheck";
+	private static final String FMP_CRED_REL_PATH = "/.fmp/mbc_migrate";
 
 	public SvcMBCProjectMigrate() {
 		_defn = new Interface();
@@ -96,6 +96,11 @@ public class SvcMBCProjectMigrate extends PluginService {
 				String t = System.getenv("HOME");
 				String path = t + FMP_CRED_REL_PATH;
 				mbc = new MBCFMP(path);
+				w.push("FileMakerPro");
+				w.add("ip", mbc.getFMPAccess().getHostIP());
+				w.add("db", mbc.getFMPAccess().getDataBaseName());
+				w.add("user", mbc.getFMPAccess().getUserName());
+				w.pop();
 			} catch (Throwable tt) {
 				throw new Exception(
 						"Failed to establish JDBC connection to FileMakerPro");
@@ -497,6 +502,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		dm.add("pid", newProjectID);
 		dm.add("method", methodID);	
 		dm.add("fillin", true);
+		dm.add("name", fmpSubjectID);
 		r = executor.execute("om.pssd.subject.create", dm.root());
 		newSubjectID = r.value("id");
 

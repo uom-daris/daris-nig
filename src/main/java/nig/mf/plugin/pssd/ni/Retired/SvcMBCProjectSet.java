@@ -4,12 +4,12 @@ import java.sql.ResultSet;
 import java.util.Collection;
 import java.util.Date;
 
+import mbciu.commons.SQLUtil;
+import mbciu.mbc.MBCFMP;
 import nig.mf.dicom.plugin.util.DICOMModelUtil;
 import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.util.AssetUtil;
 import nig.util.DateUtil;
-
-import aibl.FMP.SQLUtil;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.dtype.BooleanType;
@@ -19,7 +19,6 @@ import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 import arc.xml.XmlDoc.Element;
 
-import mbc.FMP.MBCFMP;
 
 public class SvcMBCProjectSet extends PluginService {
 

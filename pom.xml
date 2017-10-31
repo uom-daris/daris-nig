@@ -50,23 +50,9 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
-			<groupId>au.edu.unimelb.daris</groupId>
-			<artifactId>FMP-JDBC</artifactId>
-			<version>1.0.0</version>
-			<!-- provided so that we do not deploy -->
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>au.edu.unimelb.daris</groupId>
-			<artifactId>MBC-FMP</artifactId>
-			<version>1.0.5</version>
-			<!-- provided so that we do not deploy -->
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>au.edu.unimelb.daris</groupId>
-			<artifactId>aibl-commons</artifactId>
-			<version>1.0.0</version>
+			<groupId>au.edu.unimelb.mbciu</groupId>
+			<artifactId>mbciu</artifactId>
+			<version>1.0.8</version>
 			<!-- provided so that we do not deploy -->
 			<scope>provided</scope>
 		</dependency>

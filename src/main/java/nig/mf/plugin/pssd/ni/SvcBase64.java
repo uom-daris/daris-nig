@@ -3,9 +3,9 @@ package nig.mf.plugin.pssd.ni;
 import java.io.File;
 import java.util.Collection;
 
+import mbciu.commons.Base64Coder;
 import nig.compress.ArchiveUtil;
 import nig.mf.MimeTypes;
-import aibl.FMP.Base64Coder;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlWriter;
