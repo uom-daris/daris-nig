@@ -43,13 +43,6 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.filemaker</groupId>
-			<artifactId>fmjdbc</artifactId>
-			<version>FM13.0v5</version>
-			<!-- provided so that we do not deploy -->
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
 			<groupId>au.edu.unimelb.mbciu</groupId>
 			<artifactId>mbciu</artifactId>
 			<version>1.0.8</version>

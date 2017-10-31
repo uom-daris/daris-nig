@@ -64,7 +64,7 @@ set plugin_zip        daris-nig-plugin.zip
 set plugin_jar        daris-nig-plugin.jar
 set module_class      nig.mf.plugin.pssd.ni.NIGPSSDPluginModule
 # none of these previously to adding FMP-based functionality
-set plugin_libs       { daris-commons.jar fmjdbc.jar }
+set plugin_libs       { daris-commons.jar mbciu.jar }
 loadPlugin $plugin_namespace $plugin_zip $plugin_jar $module_class $plugin_label $plugin_libs
 srefresh
 

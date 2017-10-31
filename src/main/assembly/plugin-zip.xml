@@ -21,7 +21,7 @@
 			<scope>provided</scope>
 			<includes>
 				<include>${project.groupId}:daris-commons</include>
-				<include>com.filemaker:fmjdbc</include>
+				<include>au.edu.unimelb.mbciu:mbciu</include>
 			</includes>
 			<outputFileNameMapping>${artifact.artifactId}.${artifact.extension}</outputFileNameMapping>
 		</dependencySet>

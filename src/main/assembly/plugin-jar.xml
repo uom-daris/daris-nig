@@ -14,17 +14,5 @@
 			<unpack>true</unpack>
 			<scope>runtime</scope>
 		</dependencySet>
-		<dependencySet>
-			<useStrictFiltering>true</useStrictFiltering>
-			<outputDirectory>.</outputDirectory>
-			<useProjectArtifact>true</useProjectArtifact>
-			<scope>provided</scope>
-			<includes>
-				<include>${project.groupId}:FMP-JDBC</include>
-				<include>${project.groupId}:MBC-FMP</include>
-				<include>${project.groupId}:aibl-commons</include>
-			</includes>
-			<unpack>true</unpack>
-		</dependencySet>
 	</dependencySets>
 </assembly>
