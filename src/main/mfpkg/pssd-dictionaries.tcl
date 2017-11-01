@@ -11,6 +11,14 @@ proc populate_research_keywords {} {
 }
 
 #=============================================================================
+proc populate_study_other_id_types {} {
+   dictionary.entry.add :dictionary daris:pssd.study.other-id.types \
+     :term "Melbourne Brain Centre Imaging Unit"  
+   dictionary.entry.add :dictionary daris:pssd.study.other-id.types \
+     :term "Melbourne Brain Centre Imaging Unit 7T Legacy"  
+}
+     
+#=============================================================================
 proc createDict_pssd_animal_bodypart { } {
 
 	if { [xvalue exists [dictionary.exists :name nig.pssd.animal.bodypart]] == "false" } {
@@ -207,6 +215,7 @@ proc createUpdatePSSDDicts { } {
 	createDict_funding_organization
 	createDict_pssd_animal_bodypart
 	populate_research_keywords
+	populate_study_other_id_types 
 }
 
 #============================================================================#
