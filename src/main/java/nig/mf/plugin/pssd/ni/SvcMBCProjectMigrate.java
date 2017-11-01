@@ -416,9 +416,9 @@ public class SvcMBCProjectMigrate extends PluginService {
 		// Find visit by subject ID and date
 		// NB the raw date may not be the same as the acquisution date
 		// TBD exract date for all raw data first
-		visitID = mbc.find7TVisit (fmpSubjectID, vdate);
+		visitID = mbc.find7TVisit (fmpSubjectID, vdate, false);
 		if (visitID==null) {
-			visitID = mbc.create7TVisit(fmpSubjectID, vdate);
+			visitID = mbc.create7TVisit(fmpSubjectID, vdate, false);
 			w.push("fmp");
 			w.add("visit-id", new String[]{"status", "created"}, visitID);
 			w.add("id", fmpSubjectID);
