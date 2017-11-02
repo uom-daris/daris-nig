@@ -25,11 +25,13 @@ import arc.xml.XmlWriter;
  * Finds the SUbject in FMP or creates a new FMP Patient record (auto allocates Patient ID)
  * FInds the Visit (Study) in FMP or creates a new FMP 7T visit record (all have 7T Study type 'other')
  *      which auto allocates the visit ID
- * The name of new Subjects is set to the FMP patient ID for convenience (also stored elsewhere)
+ * The name of new Subjects is set to the FMP patient ID for convenience 
+ * The FMP Patinent ID is also stored in nig-daris:nig-pssd-identity/id 
  * The FMP visit ID is stored in daris:pssd-study/other-id
  * The old H numbers (in the Subject name) are also stored on Studies in daris:pssd-study/other-id
  * The DICOM Patient ID element is set to the FMP patient ID
  * The DICOM AccessionNumber is set to the FMP Visit ID
+ * The old H number is not stored in DICOM meta-data
  * 
  * @author nebk
  *
@@ -427,7 +429,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		// Find visit by subject ID and date
 		// NB the raw date may not be the same as the acquisution date
 		// TBD exract date for all raw data first
-		visitID = mbc.find7TVisit (fmpSubjectID, vdate, false);
+		visitID = mbc.find7TMRVisit (fmpSubjectID, vdate, false);
 		if (visitID==null) {
 			visitID = mbc.create7TVisit(fmpSubjectID, vdate, false);
 			w.push("fmp");
