@@ -1,24 +1,15 @@
 package nig.mf.plugin.pssd.ni;
 
-import java.io.ByteArrayInputStream;
 import java.util.Collection;
 import java.util.Date;
 
-import mbciu.mbc.MBCFMP;
 import nig.io.LittleEndianDataInputStream;
-import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.pssd.util.ni.MRMetaData;
-import nig.mf.plugin.util.AssetUtil;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
 import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
-import arc.mf.plugin.PluginTask;
-import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.PluginService.Interface.Element;
-import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
-import arc.mf.plugin.dtype.StringType;
-import arc.streams.SizedInputStream;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;

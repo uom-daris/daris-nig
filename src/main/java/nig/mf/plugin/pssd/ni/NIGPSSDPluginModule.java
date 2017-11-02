@@ -54,6 +54,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		_svs.add(new SvcMBCProjectMigrate());
 		_svs.add(new SvcMBCStudyMetaFromDICOM());
 		_svs.add(new SvcMBCMRRawStudyFetchDate());
+		_svs.add(new SvcMBCMRRawDataSetFetchMeta());
 
 		// Test service
 		_svs.add(new SvcTesting());
