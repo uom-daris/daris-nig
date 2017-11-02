@@ -59,7 +59,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 	public String name() {
 
-		return "nig.pssd.mbic.project.migrate";
+		return "nig.pssd.mbic.mr.project.migrate";
 	}
 
 	public String description() {
