@@ -8,6 +8,7 @@ import nig.mf.plugin.pssd.util.ni.MRMetaData;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
 import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
+import arc.mf.plugin.PluginTask;
 import arc.mf.plugin.PluginService.Interface.Element;
 import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.dtype.CiteableIdType;
@@ -53,7 +54,7 @@ public class SvcMBCMRRawDataSetFetchMeta extends PluginService {
 
 	@Override
 	public int maxNumberOfOutputs() {
-		return 1;
+		return 0;
 	}
 
 	public boolean canBeAborted() {
@@ -80,7 +81,8 @@ public class SvcMBCMRRawDataSetFetchMeta extends PluginService {
 		Collection<String> dataSetIDs = r.values("id");
 		if (dataSetIDs==null) return;
 		for (String dataSetID : dataSetIDs) {
-			
+			PluginTask.checkIfThreadTaskAborted();
+
 			// Fetch the data set content
 			String dataSetCID = CiteableIdUtil.idToCid(executor(), dataSetID);
 			w.add("dataset", dataSetCID);
