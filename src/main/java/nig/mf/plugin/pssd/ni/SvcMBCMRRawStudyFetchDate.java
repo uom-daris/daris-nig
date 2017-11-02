@@ -8,6 +8,7 @@ import nig.mf.plugin.pssd.util.ni.MRMetaData;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
 import nig.util.DateUtil;
 import arc.mf.plugin.PluginService;
+import arc.mf.plugin.PluginTask;
 import arc.mf.plugin.PluginService.Interface.Element;
 import arc.mf.plugin.dtype.CiteableIdType;
 import arc.xml.XmlDoc;
@@ -79,6 +80,7 @@ public class SvcMBCMRRawStudyFetchDate extends PluginService {
 		Collection<String> studyIDs = r.values("id");
 		if (studyIDs==null) return;
 		for (String studyID : studyIDs) {
+			PluginTask.checkIfThreadTaskAborted();
 			String studyCID = CiteableIdUtil.idToCid(executor(), studyID);
 			w.add("study", studyCID);
 			// For the STudy, find the first raw data file
