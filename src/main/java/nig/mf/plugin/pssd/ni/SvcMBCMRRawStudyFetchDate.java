@@ -52,7 +52,7 @@ public class SvcMBCMRRawStudyFetchDate extends PluginService {
 
 	@Override
 	public int maxNumberOfOutputs() {
-		return 1;
+		return 0;
 	}
 
 	public boolean canBeAborted() {
