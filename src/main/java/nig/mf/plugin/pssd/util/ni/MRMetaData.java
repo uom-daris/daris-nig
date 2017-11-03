@@ -12,6 +12,8 @@ import nig.util.DateUtil;
 
 /**
  * Siemens VB15-VB17 RaidFile structure
+ * This is derived from the same parsing code as is in the raw MR upload client
+ * 
  * @author nebk
  *
  */

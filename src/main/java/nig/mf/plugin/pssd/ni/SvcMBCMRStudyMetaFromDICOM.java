@@ -21,10 +21,10 @@ import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
-public class SvcMBCStudyMetaFromDICOM extends PluginService {
+public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 	private Interface _defn;
 
-	public SvcMBCStudyMetaFromDICOM() throws Throwable {
+	public SvcMBCMRStudyMetaFromDICOM() throws Throwable {
 
 		_defn = new Interface();
 		Interface.Element me = new Interface.Element("cid",
@@ -41,7 +41,7 @@ public class SvcMBCStudyMetaFromDICOM extends PluginService {
 
 	@Override
 	public String name() {
-		return "nig.pssd.mbic.study.metadata.set";
+		return "nig.pssd.mbic.mr.study.metadata.set";
 	}
 
 	@Override
