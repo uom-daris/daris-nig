@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.util.Collection;
 import java.util.Date;
 
+import mbciu.commons.FMPAccess;
 import mbciu.mbc.MBCFMP;
 import nig.mf.dicom.plugin.util.DICOMPatient;
 import nig.mf.plugin.util.AssetUtil;
@@ -54,7 +55,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list mapping to FMP, don't migrate any data (defaults to true).", 0, 1));
 		_defn.add(new Element("clone-content", BooleanType.DEFAULT, "Actually clone the content of the DataSets.  If false (the default), the DataSets are cloned but without content.", 0, 1));
 		_defn.add(new Element("copy-raw", BooleanType.DEFAULT, "If true (default), when cloning the Siemens RAW (only) DataSet copy the content.  If false, the RAW content is moved.  DICOM content is always copied.", 0, 1));
-		_defn.add(new Element("do-fmp", BooleanType.DEFAULT, "If true created Patient and Visit records in FMP. Default is false. If false, and if the subject is not found in FMP, it won't make a pateint and it won't proceed further for that Subject (it can't).", 0, 1));
+		_defn.add(new Element("resource-file", StringType.DEFAULT, "Relative resource file path. Defaults to '/.fmp/mbc_migrate'.", 0, 1));
 	}
 
 	public String name() {
@@ -103,6 +104,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		String idx = args.stringValue("idx");;
 		Boolean listOnly = args.booleanValue("list-only", true);
 		Boolean cloneContent = args.booleanValue("clone-content", false);
+		String resourceFile = args.stringValue("resource-file", FMP_CRED_REL_PATH);
 		//
 		String patientIDFMP = args.stringValue("patient-id");
 		String visitIDFMP = args.stringValue("visit-id");
@@ -114,26 +116,26 @@ public class SvcMBCProjectMigrate extends PluginService {
 		}
 		//
 		Boolean copyRawContent = args.booleanValue("copy-raw",true);
-		Boolean doFMP = args.booleanValue("do-fmp",false);
 		//
 		XmlDoc.Element projectMeta = AssetUtil.getAsset(executor(), oldProjectID, null);
 		String methodID = projectMeta.value("asset/meta/daris:pssd-project/method/id");
 
 		// OPen FMP
 		MBCFMP mbc = null;
+		String home = System.getProperty("user.home");
 		if (patientIDFMP==null) {
 			try {
-				String t = System.getenv("HOME");
-				String path = t + FMP_CRED_REL_PATH;
-				mbc = new MBCFMP(path);
 				w.push("FileMakerPro");
-				w.add("ip", mbc.getFMPAccess().getHostIP());
-				w.add("db", mbc.getFMPAccess().getDataBaseName());
-				w.add("user", mbc.getFMPAccess().getUserName());
+				String path = home + resourceFile;
+				mbc = new MBCFMP(path);
+				FMPAccess fmp = mbc.getFMPAccess();
+				w.add("ip", fmp.getHostIP());
+				w.add("db", fmp.getDataBaseName());
+				w.add("user", fmp.getUserName());
 				w.pop();
 			} catch (Throwable tt) {
 				throw new Exception(
-						"Failed to establish JDBC connection to FileMakerPro");
+						"Failed to establish JDBC connection to FileMakerPro with resource file  '" + home + FMP_CRED_REL_PATH + "'.", tt);
 			}
 		}
 
@@ -170,42 +172,43 @@ public class SvcMBCProjectMigrate extends PluginService {
 			w.push("fmp");
 
 			// Try to lookup in FMP or use given value for single shot testing
+			String patientIDFMP2 = null;
 			try {
 				if (patientIDFMP==null) {
-					patientIDFMP = findInFMP (executor(),subjectID, mbc, oldDICOMMeta, sb, w);
+					patientIDFMP2 = findInFMP (executor(),subjectID, mbc, oldDICOMMeta, sb, w);
 
-					if (patientIDFMP!=null) {
+					if (patientIDFMP2!=null) {
 						w.add("found", "true");
-						w.add("patient-id", patientIDFMP);
+						w.add("patient-id", patientIDFMP2);
 					} else {
 						w.add("found", "false");
 						// Create new Patient Record in FMP
-						if (doFMP) {
-							w.add("patient-id", patientIDFMP);
-							createPatientInFMP (oldDICOMMeta, mbc);
-							patientIDFMP = findInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
+						if (!listOnly) {
+//							createPatientInFMP (oldDICOMMeta, mbc);
+							patientIDFMP2 = findInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
+							w.add("patient-id", patientIDFMP2);
 							w.add("created", "true");
 						} else {
 							w.add("created", "false");
 						}
-						w.pop();
 					}
+					w.pop();
 				} else {
 					w.add("found", "ID-given");
 					w.add("patient-id", patientIDFMP);	
 					w.pop();
+					patientIDFMP2 = patientIDFMP;
 				}
 
 				// Proceed now we have a FMP SUbject ID one way or the other
-				if (patientIDFMP!=null) {
+				if (patientIDFMP2!=null) {
 					sb.append("\n");
 
 					// Now migrate the data for this Subject
 					if (!listOnly) {
-						migrateSubject (executor(), mbc, newProjectID, methodID, subjectID, oldSubjectName, patientIDFMP,  visitIDFMP, cloneContent, copyRawContent, w);
+						migrateSubject (executor(), mbc, newProjectID, methodID, subjectID, oldSubjectName, patientIDFMP2,  visitIDFMP, cloneContent, copyRawContent, w);
 					}
 				}
-
 			} catch (Throwable t) {
 				w.add("error", t.getMessage());
 				w.pop();
@@ -233,6 +236,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 
 	private void createPatientInFMP (XmlDoc.Element dicomMeta, MBCFMP mbc) throws Throwable {
+		return;
+		/*
 		DICOMPatient dp = new DICOMPatient(dicomMeta);	
 
 		// Remove single quotes from names
@@ -266,8 +271,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 			System.out.println("sex="+sex2);
 			System.out.println("dob="+dob);
 			mbc.createPatient(fn, ln, sex2, dob);
-
 		}
+		*/
 	}
 
 	private String findInFMP (ServiceExecutor executor, String cid, MBCFMP mbc, XmlDoc.Element dicomMeta, StringBuilder sb, XmlWriter w) throws Throwable {
@@ -431,7 +436,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 		// TBD exract date for all raw data first
 		visitID = mbc.find7TMRVisit (fmpSubjectID, vdate, false);
 		if (visitID==null) {
-			visitID = mbc.create7TVisit(fmpSubjectID, vdate, false);
+//			visitID = mbc.create7TVisit(fmpSubjectID, vdate, false);
 			w.push("fmp");
 			w.add("visit-id", new String[]{"status", "created"}, visitID);
 			w.add("id", fmpSubjectID);
