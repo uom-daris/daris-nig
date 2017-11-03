@@ -184,7 +184,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 						w.add("found", "false");
 						// Create new Patient Record in FMP
 						if (!listOnly) {
-//							createPatientInFMP (oldDICOMMeta, mbc);
+							createPatientInFMP (oldDICOMMeta, mbc);
 							patientIDFMP2 = findInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
 							w.add("patient-id", patientIDFMP2);
 							w.add("created", "true");
@@ -199,10 +199,10 @@ public class SvcMBCProjectMigrate extends PluginService {
 					w.pop();
 					patientIDFMP2 = patientIDFMP;
 				}
+				sb.append("\n");
 
 				// Proceed now we have a FMP SUbject ID one way or the other
 				if (patientIDFMP2!=null) {
-					sb.append("\n");
 
 					// Now migrate the data for this Subject
 					if (!listOnly) {
@@ -236,8 +236,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 
 	private void createPatientInFMP (XmlDoc.Element dicomMeta, MBCFMP mbc) throws Throwable {
-		return;
-		/*
+
 		DICOMPatient dp = new DICOMPatient(dicomMeta);	
 
 		// Remove single quotes from names
@@ -272,7 +271,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 			System.out.println("dob="+dob);
 			mbc.createPatient(fn, ln, sex2, dob);
 		}
-		*/
+
 	}
 
 	private String findInFMP (ServiceExecutor executor, String cid, MBCFMP mbc, XmlDoc.Element dicomMeta, StringBuilder sb, XmlWriter w) throws Throwable {
