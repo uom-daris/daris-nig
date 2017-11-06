@@ -100,7 +100,7 @@ public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 		if (accessionNumber!=null) {
 			dm = new XmlDocMaker("args");
 			dm.add("id", studyCID);
-			dm.add("other-id", accessionNumber);
+			dm.add("other-id", new String[]{"type", "Melbourne Brain Centre Imaging Unit"}, accessionNumber);
 			executor().execute("om.pssd.study.update", dm.root());
 		}
 	}
