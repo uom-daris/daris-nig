@@ -166,6 +166,9 @@ public class SvcMBCProjectMigrate extends PluginService {
 			XmlDoc.Element oldSubjectMeta = AssetUtil.getAsset(executor(), subjectID, null);
 			String oldSubjectName = oldSubjectMeta.value("asset/meta/daris:pssd-object/name");
 			XmlDoc.Element oldDICOMMeta =  oldSubjectMeta.element("asset/meta/mf-dicom-patient");
+			if (oldDICOMMeta==null) {
+				throw new Exception ("THe DICOM meta-data on subject " + subjectID + " is missing");
+			}
 			w.push("subject");
 			w.add("old-id", subjectID);
 			w.add(oldDICOMMeta);
@@ -206,7 +209,7 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 					// Now migrate the data for this Subject
 					if (!listOnly) {
-						migrateSubject (executor(), mbc, newProjectID, methodID, subjectID, oldSubjectName, patientIDFMP2,  visitIDFMP, cloneContent, copyRawContent, w);
+						migrateSubject (executor(), mbc, newProjectID, methodID, subjectID, oldSubjectName, oldDICOMMeta,  patientIDFMP2,  visitIDFMP, cloneContent, copyRawContent, w);
 					}
 				}
 			} catch (Throwable t) {
@@ -350,11 +353,13 @@ public class SvcMBCProjectMigrate extends PluginService {
 	}
 
 	private void  migrateSubject (ServiceExecutor executor,  MBCFMP mbc, String newProjectID, String methodID, String oldSubjectID, 
-			String oldSubjectName, String patientIDFMP, String visitIDFMP, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
+			String oldSubjectName, XmlDoc.Element oldDICOMMeta, String patientIDFMP, String visitIDFMP, Boolean cloneContent, Boolean copyRawContent, XmlWriter w) throws Throwable {
 		PluginTask.checkIfThreadTaskAborted();
 
 		// FInd existing or create new Subject. We use mf-dicom-patient/id to find the Subject
-		String newSubjectID = findOrCreateSubject (executor, patientIDFMP, methodID, oldSubjectID, newProjectID);
+		// mf-dicom-patient must be there
+		DICOMPatient dp = new DICOMPatient(oldDICOMMeta);	
+		String newSubjectID = findOrCreateSubject (executor, patientIDFMP, methodID, oldSubjectID, dp, newProjectID);
 		w.add("new-id", newSubjectID);
 		// Find the new ExMethod (it's auto created when the Subject is made)
 		Collection<String> newExMethodIDs = childrenIDs (executor, newSubjectID);
@@ -431,11 +436,14 @@ public class SvcMBCProjectMigrate extends PluginService {
 		}
 
 		// Find visit by subject ID and date
-		// NB the raw date may not be the same as the acquisution date
-		// TBD exract date for all raw data first
+		// NB the raw date may not be the same as the acquisition date
+		// TBD remove leading 7TMR and put in FMP
 		visitID = mbc.find7TMRVisit (fmpSubjectID, vdate, false);
+		if (visitID!=null) {
+			visitID = "7TMR-" + visitID;
+		}
 		if (visitID==null) {
-//			visitID = mbc.create7TVisit(fmpSubjectID, vdate, false);
+			visitID = "7TMR-"+mbc.create7TVisit(fmpSubjectID, vdate, false);
 			w.push("fmp");
 			w.add("visit-id", new String[]{"status", "created"}, visitID);
 			w.add("id", fmpSubjectID);
@@ -572,7 +580,8 @@ public class SvcMBCProjectMigrate extends PluginService {
 
 
 
-	private String findOrCreateSubject (ServiceExecutor executor, String fmpSubjectID, String methodID, String oldSubjectID, String newProjectID) throws Throwable {
+	private String findOrCreateSubject (ServiceExecutor executor, String fmpSubjectID, String methodID, String oldSubjectID, 
+			DICOMPatient dp, String newProjectID) throws Throwable {
 
 		// See if we can find the Subject pre-existing
 		XmlDocMaker dm = new XmlDocMaker("args");
@@ -593,7 +602,11 @@ public class SvcMBCProjectMigrate extends PluginService {
 		dm.add("pid", newProjectID);
 		dm.add("method", methodID);	
 		dm.add("fillin", true);
-		dm.add("name", fmpSubjectID);
+		String newSubjectName = fmpSubjectID;
+		if (dp!=null) {
+			newSubjectName += "-" + dp.getLastName();
+		}
+		dm.add("name", newSubjectName);
 		r = executor.execute("om.pssd.subject.create", dm.root());
 		newSubjectID = r.value("id");
 
