@@ -1,27 +1,21 @@
 package nig.mf.plugin.pssd.ni;
 
-import java.sql.ResultSet;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Vector;
 
-import nig.mf.dicom.plugin.util.DICOMPatient;
-import nig.mf.plugin.util.AssetUtil;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
-import nig.util.DateUtil;
-import arc.mf.plugin.PluginLog;
 import arc.mf.plugin.PluginService;
-import arc.mf.plugin.ServiceExecutor;
 import arc.mf.plugin.dtype.AssetType;
-import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
-import arc.mf.plugin.dtype.IntegerType;
-import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
 public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
+	
+	// THis is the type of the other-id.     It's ok to do this
+	// because this is an MBC service
+	private static final String TYPE = "Melbourne Brain Centre Imaging Unit";
+	
+	//
 	private Interface _defn;
 
 	public SvcMBCMRStudyMetaFromDICOM() throws Throwable {
@@ -46,7 +40,7 @@ public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 
 	@Override
 	public String description() {
-		return "Fetches the AccessionNumber from DICOM header and locates in daris:pssd-study/other-id";
+		return "Fetches the AccessionNumber from DICOM header and locates in daris:pssd-study/other-id with the correct type.";
 	}
 
 	@Override
@@ -100,7 +94,7 @@ public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 		if (accessionNumber!=null) {
 			dm = new XmlDocMaker("args");
 			dm.add("id", studyCID);
-			dm.add("other-id", new String[]{"type", "Melbourne Brain Centre Imaging Unit"}, accessionNumber);
+			dm.add("other-id", new String[]{"type", TYPE}, accessionNumber);
 			executor().execute("om.pssd.study.update", dm.root());
 		}
 	}
