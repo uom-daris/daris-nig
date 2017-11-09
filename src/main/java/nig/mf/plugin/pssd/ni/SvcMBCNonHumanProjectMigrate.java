@@ -145,7 +145,8 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 		PluginTask.checkIfThreadTaskAborted();
 
 		// FInd existing or create new Subject. We use mf-dicom-patient/{name,id} to find the Subject
-		DICOMPatient dp = new DICOMPatient(oldDICOMMeta);	
+		DICOMPatient dp = new DICOMPatient(oldDICOMMeta);
+		w.add("dp.id", dp.getID());
 		String newSubjectID = findOrCreateSubject (executor, methodID, oldSubjectID, dp, newProjectID);
 		w.add("new-id", newSubjectID);
 		// Find the new ExMethod (it's auto created when the Subject is made)
@@ -344,7 +345,14 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 		dm.add("pid", newProjectID);
 		dm.add("method", methodID);	
 		dm.add("fillin", true);
-		String newSubjectName = dp.getID() + "-" + dp.getLastName();
+		String newSubjectName = null;
+		if (dp.getID()!=null && dp.getLastName()!=null) {
+			newSubjectName = dp.getID() + "-" + dp.getLastName();
+		} else if (dp.getID()!=null && dp.getLastName()==null) {
+			newSubjectName = dp.getID();
+		} else if (dp.getID()==null && dp.getLastName()!=null) {
+			newSubjectName = dp.getLastName();
+		}
 
 		dm.add("name", newSubjectName);
 		XmlDoc.Element r = executor.execute("om.pssd.subject.create", dm.root());
