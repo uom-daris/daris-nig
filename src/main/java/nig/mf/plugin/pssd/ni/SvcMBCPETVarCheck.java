@@ -658,14 +658,14 @@ public class SvcMBCPETVarCheck extends PluginService {
 							+ petScanTimeDICOM.substring(4, 6);
 					if (update) {
 						w.add("DICOM-PET-scan-time-inserted-into-FMP", t2);
-						mbc.updateScanTime(mbcPatientID, date, scanTypeFMP, t2,
+						mbc.updatePETCTScanTime(mbcPatientID, date, null, scanTypeFMP, t2,
 								true, false);
 					}
 
 					// Insert DaRIS ID into FMP
 					if (update) {
 						w.add("Study-CID-inserted-into-FMP", studyCID);
-						mbc.updateDaRISID(mbcPatientID, date, scanTypeFMP,
+						mbc.updatePETCTDaRISID(mbcPatientID, date, null, scanTypeFMP,
 								studyCID, false);
 					}
 
@@ -687,9 +687,9 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 					if (update) {
 						w.add("DICOM-CT-scan-time-inserted-into-FMP", t2);
-						mbc.updateScanTime(mbcPatientID, date, scanTypeFMP, t2,
+						mbc.updatePETCTScanTime(mbcPatientID, date, null, scanTypeFMP, t2,
 								false, false);
-						mbc.updateDaRISID(mbcPatientID, date, scanTypeFMP,
+						mbc.updatePETCTDaRISID(mbcPatientID, date, null, scanTypeFMP,
 								studyCID, false);
 					}
 					// Update the parent Study meta-data saying it's been

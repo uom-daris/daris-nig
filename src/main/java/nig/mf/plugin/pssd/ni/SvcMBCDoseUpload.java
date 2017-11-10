@@ -417,7 +417,7 @@ public class SvcMBCDoseUpload extends PluginService {
                 //
                 // Update the dose fields in FMP
                 if (update) {
-                    mbc.updateDose(mbcPatientID, date, doseLengthProductTotal,
+                    mbc.updatePETCTDose(mbcPatientID, date, null, doseLengthProductTotal,
                             XRayModType, "" + dlp, kVp, current, false);
                   	setStudyMetaData (executor, studyCID);
                     w.add("update-study-meta", true);

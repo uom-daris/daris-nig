@@ -430,20 +430,13 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			vdate = oldDICOM.dateValue("sdate");
 		} else if (oldRaw!=null) {
 			vdate = oldRaw.dateValue("date");
-
-			// TBD retro fit all raw Studies with the date
-
 		}
 
 		// Find visit by subject ID and date
 		// NB the raw date may not be the same as the acquisition date
-		// TBD remove leading 7TMR and put in FMP
 		visitID = mbc.find7TMRVisit (fmpSubjectID, vdate, false);
-		if (visitID!=null) {
-			visitID = "7TMR-" + visitID;
-		}
 		if (visitID==null) {
-			visitID = "7TMR-"+mbc.create7TVisit(fmpSubjectID, vdate, false);
+			visitID = mbc.create7TVisit(fmpSubjectID, vdate, false);
 			w.push("fmp");
 			w.add("visit-id", new String[]{"status", "created"}, visitID);
 			w.add("id", fmpSubjectID);

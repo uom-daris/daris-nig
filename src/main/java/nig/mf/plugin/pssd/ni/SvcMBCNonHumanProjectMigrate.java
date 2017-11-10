@@ -112,6 +112,7 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 			XmlDoc.Element oldSubjectMeta = AssetUtil.getAsset(executor(), subjectID, null);
 			String oldSubjectName = oldSubjectMeta.value("asset/meta/daris:pssd-object/name");
 			XmlDoc.Element oldDICOMMeta =  oldSubjectMeta.element("asset/meta/mf-dicom-patient");
+			DICOMPatient dp = new DICOMPatient(oldDICOMMeta);
 			if (oldDICOMMeta==null) {
 				throw new Exception ("THe DICOM meta-data on subject " + subjectID + " is missing");
 			}
@@ -146,7 +147,6 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 
 		// FInd existing or create new Subject. We use mf-dicom-patient/{name,id} to find the Subject
 		DICOMPatient dp = new DICOMPatient(oldDICOMMeta);
-		w.add("dp.id", dp.getID());
 		String newSubjectID = findOrCreateSubject (executor, methodID, oldSubjectID, dp, newProjectID);
 		w.add("new-id", newSubjectID);
 		// Find the new ExMethod (it's auto created when the Subject is made)
