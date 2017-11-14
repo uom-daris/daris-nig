@@ -390,7 +390,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		}
 
 
-		// Now find the  Studies to migrate
+		// Now find the  Studies to migrate. FInd them in time order because we want DICOM first.
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.push("sort");
 		dm.add("key", "ctime");
@@ -707,6 +707,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 				XmlDoc.Element r = executor.execute("asset.query", dm.root());
 				String id = r.value("id");
 				if (id!=null) {
+					// FOUnd
 					w.add("new-id", new String[]{"status", "found"}, CiteableIdUtil.idToCid(executor, id));
 				} else {
 
@@ -715,6 +716,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 					dm.add("id", oldDataSetID);
 					dm.add("pid", newStudyID);
 					dm.add("fillin", "true");
+					String newDataSetID = null;
 					if (isDICOM) {
 						if (cloneContent) {
 							dm.add("content", "true");
@@ -722,7 +724,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 							dm.add("content", "false");						
 						}
 						r = executor.execute("om.pssd.dataset.clone", dm.root());
-						String newDataSetID = r.value("id");
+						newDataSetID = r.value("id");
 
 						// Now we need to update the DICOM header because the Patient ID is changing
 						// from the Visit-based H number to the FMP generated ID
@@ -738,9 +740,6 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 							dm.add("value", fmpVisitID);
 							dm.pop();
 							executor.execute("daris.dicom.metadata.set", dm.root());
-
-							// TBD prune DataSet
-
 							w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
 						} else {
 							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
@@ -759,7 +758,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 							dm.add("content", "false");
 						}
 						r = executor.execute("om.pssd.dataset.clone", dm.root());		
-						String newDataSetID = r.value("id");
+					    newDataSetID = r.value("id");
 
 						// Now move the content over as needed
 						if (cloneContent) {
@@ -780,8 +779,15 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
 						}
 					}
+					
+					// Prune new DataSet
+					dm = new XmlDocMaker("args");
+					dm.add("id", CiteableIdUtil.cidToId(executor, newDataSetID));
+					executor.execute("asset.prune", dm.root());
 				}
-				w.pop();
+				w.pop();			
+				
+			
 			}
 		}
 	}
