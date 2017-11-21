@@ -160,19 +160,22 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 
 		// Fetch the Subjects in the old archive project (visit based)
 		XmlDocMaker dm = new XmlDocMaker("args");
-		dm.add("id", oldProjectID);
+		dm.add("cid", oldProjectID);
 		if (idx!=null) {
 			dm.add("idx", idx);
 		}
 		if (size!=null) {
 			dm.add("size", size);
 		}
-		dm.add("sort", "true");
-		XmlDoc.Element r = executor().execute("om.pssd.collection.member.list", dm.root());
+		dm.push("sort");
+		dm.add("key", new String[]{"order", "asc"}, "cid");
+		dm.pop();
+		XmlDoc.Element r = executor().execute("daris.object.children.list", dm.root());
 
 		// Iterate through SUbjects
 		sb.append("DaRIS ID").append(",").append("first name").append(",").append("last name").append(",").append("sex").append(",").append("dob").append(",").append("FMP ID").append("\n");
-		Collection<String> subjectIDs = r.values("object/id");
+		Collection<String> subjectIDs = r.values("object/@cid");
+		
 		for (String subjectID : subjectIDs) {
 			PluginTask.checkIfThreadTaskAborted();
 
@@ -181,7 +184,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			String oldSubjectName = oldSubjectMeta.value("asset/meta/daris:pssd-object/name");
 			XmlDoc.Element oldDICOMMeta =  oldSubjectMeta.element("asset/meta/mf-dicom-patient");
 			if (oldDICOMMeta==null) {
-				throw new Exception ("THe DICOM meta-data on subject " + subjectID + " is missing");
+				throw new Exception ("The DICOM meta-data on subject " + subjectID + " is missing");
 			}
 			w.push("subject");
 			w.add("old-id", subjectID);
@@ -227,7 +230,12 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 					}
 				}
 			} catch (Throwable t) {
-				w.add("error", t.getMessage());
+				StackTraceElement[] ste = t.getStackTrace();
+				w.push("error");
+				for (int i=0; i<ste.length; i++) {
+				   w.add("error", ste[i].toString());
+				}
+				w.pop();
 				w.pop();
 			}
 			w.pop();
