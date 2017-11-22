@@ -175,7 +175,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		// Iterate through SUbjects
 		sb.append("DaRIS ID").append(",").append("first name").append(",").append("last name").append(",").append("sex").append(",").append("dob").append(",").append("FMP ID").append("\n");
 		Collection<String> subjectIDs = r.values("object/@cid");
-		
+
 		for (String subjectID : subjectIDs) {
 			PluginTask.checkIfThreadTaskAborted();
 
@@ -206,8 +206,12 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 						if (!listOnly) {
 							createPatientInFMP (oldDICOMMeta, mbc);
 							patientIDFMP2 = findSubjectInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
-							w.add("patient-id", patientIDFMP2);
-							w.add("created", "true");
+							if (patientIDFMP2!=null) {
+								w.add("patient-id", patientIDFMP2);
+								w.add("created", "true");
+							} else {
+								w.add("created", new String[]{"status", "failed"}, "false");
+							}
 						} else {
 							w.add("created", "false");
 						}
@@ -233,7 +237,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 				StackTraceElement[] ste = t.getStackTrace();
 				w.push("error");
 				for (int i=0; i<ste.length; i++) {
-				   w.add("error", ste[i].toString());
+					w.add("error", ste[i].toString());
 				}
 				w.pop();
 				w.pop();
@@ -685,12 +689,15 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
 
 		// Iterate and clone
+		Boolean dbg = false;
 		if (oldDataSetIDs!=null) {
 			for (String oldDataSetID : oldDataSetIDs) {
 				PluginTask.checkIfThreadTaskAborted();
 
-//				w.push("dataset");
-//				w.add("old-id", oldDataSetID);
+				if (dbg) { 
+					w.push("dataset");
+					w.add("old-id", oldDataSetID);
+				}
 				// Get old asset meta-data and UID
 				XmlDoc.Element asset = AssetUtil.getAsset(executor, oldDataSetID, null);
 
@@ -716,7 +723,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 				String id = r.value("id");
 				if (id!=null) {
 					// FOUnd
-////					w.add("new-id", new String[]{"status", "found"}, CiteableIdUtil.idToCid(executor, id));
+					if (dbg) w.add("new-id", new String[]{"status", "found"}, CiteableIdUtil.idToCid(executor, id));
 				} else {
 
 					// Create new by cloning it (coping all meta-data)
@@ -748,9 +755,9 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 							dm.add("value", fmpVisitID);
 							dm.pop();
 							executor.execute("daris.dicom.metadata.set", dm.root());
-//							w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
+							if (dbg) w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
 						} else {
-//							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
+							if (dbg) w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
 						}
 
 					} else {
@@ -766,7 +773,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 							dm.add("content", "false");
 						}
 						r = executor.execute("om.pssd.dataset.clone", dm.root());		
-					    newDataSetID = r.value("id");
+						newDataSetID = r.value("id");
 
 						// Now move the content over as needed
 						if (cloneContent) {
@@ -776,26 +783,25 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 								if (contentURL!=null && contentType!=null) {
 									setAssetContentUrlAndType (newDataSetID, contentURL, contentType);
 									internalizeAssetByMove (newDataSetID);
-//									w.add("new-id", new String[]{"status", "created", "content", "moved"}, newDataSetID);
+									if (dbg) w.add("new-id", new String[]{"status", "created", "content", "moved"}, newDataSetID);
 								} else {
-//									w.add("new-id", new String[]{"status", "created", "content", "failed"}, newDataSetID);
+									if (dbg) w.add("new-id", new String[]{"status", "created", "content", "failed"}, newDataSetID);
 								}
 							} else {
-//								w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
+								if (dbg) w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
 							}
 						} else {
-//							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
+							if (dbg) w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
 						}
 					}
-					
+
 					// Prune new DataSet
 					dm = new XmlDocMaker("args");
 					dm.add("id", CiteableIdUtil.cidToId(executor, newDataSetID));
 					executor.execute("asset.prune", dm.root());
 				}
-//				w.pop();			
-				
-			
+				if (dbg) w.pop();
+
 			}
 		}
 	}
