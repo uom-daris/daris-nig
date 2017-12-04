@@ -468,6 +468,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		} else if (oldRaw!=null) {
 			vdate = oldRaw.dateValue("date");
 		}
+		w.add("date", vdate);
 
 		// Find visit by subject ID and date
 		// NB the raw date may not be the same as the acquisition date
@@ -476,7 +477,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		// visit gets created in FMP.  Then when the Raw study is migrated, it finds
 		// the visit already existing in FMP.
 		Boolean created = false;
-		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, false);
+		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, true);
 		if (fmpVisitID==null) {
 			fmpVisitID = mbc.create7TVisit(fmpSubjectID, vdate, height, weight, false);
 			w.push("fmp");
@@ -484,14 +485,12 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			String notes = "Auto created by DaRIS service nig.pssd.mbic.mr.human.project.migrate at " + DateUtil.todaysTime() + " during archive migration to the Subject-centric structure";
 			mbc.updateStringInVisit(fmpSubjectID, vdate, fmpVisitID, "MRIvisitnotes", notes,  "7TMR", false);
 			w.add("id", fmpSubjectID);
-			w.add("date", vdate);
 			w.pop();
 			created = true;
 		} else {
 			w.push("fmp");
 			w.add("visit-id", new String[]{"status", "found"}, fmpVisitID);
 			w.add("id", fmpSubjectID);
-			w.add("date", vdate);
 			w.pop();		
 		}
 		return new FMPVisitHolder(fmpSubjectID, fmpVisitID, created);

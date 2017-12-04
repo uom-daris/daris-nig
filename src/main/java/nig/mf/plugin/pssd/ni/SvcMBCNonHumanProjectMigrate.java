@@ -381,12 +381,15 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 		Collection<String> oldDataSetIDs = childrenIDs (executor, oldStudyID);
 
 		// Iterate and clone
+		Boolean dbg = false;
 		if (oldDataSetIDs!=null) {
 			for (String oldDataSetID : oldDataSetIDs) {
 				PluginTask.checkIfThreadTaskAborted();
 
-				w.push("dataset");
-				w.add("old-id", oldDataSetID);
+				if (dbg) {
+					w.push("dataset");
+					w.add("old-id", oldDataSetID);
+				}
 				// Get old asset meta-data and UID
 				XmlDoc.Element asset = AssetUtil.getAsset(executor, oldDataSetID, null);
 
@@ -411,7 +414,7 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 				XmlDoc.Element r = executor.execute("asset.query", dm.root());
 				String id = r.value("id");
 				if (id!=null) {
-					w.add("new-id", new String[]{"status", "found"}, CiteableIdUtil.idToCid(executor, id));
+					if (dbg) w.add("new-id", new String[]{"status", "found"}, CiteableIdUtil.idToCid(executor, id));
 				} else {
 
 					// Create new by cloning it (coping all meta-data)
@@ -429,9 +432,9 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 						String newDataSetID = r.value("id");
 
 						if (cloneContent) {
-							w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
+							if (dbg) w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
 						} else {
-							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
+							if (dbg) w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
 						}
 					} else {
 						if (cloneContent) {
@@ -456,19 +459,19 @@ public class SvcMBCNonHumanProjectMigrate extends PluginService {
 								if (contentURL!=null && contentType!=null) {
 									setAssetContentUrlAndType (newDataSetID, contentURL, contentType);
 									internalizeAssetByMove (newDataSetID);
-									w.add("new-id", new String[]{"status", "created", "content", "moved"}, newDataSetID);
+									if (dbg) w.add("new-id", new String[]{"status", "created", "content", "moved"}, newDataSetID);
 								} else {
-									w.add("new-id", new String[]{"status", "created", "content", "failed"}, newDataSetID);
+									if (dbg) w.add("new-id", new String[]{"status", "created", "content", "failed"}, newDataSetID);
 								}
 							} else {
-								w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
+								if (dbg) w.add("new-id", new String[]{"status", "created", "content", "copied"}, newDataSetID);
 							}
 						} else {
-							w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
+							if (dbg) w.add("new-id", new String[]{"status", "created", "content", "none"}, newDataSetID);
 						}
 					}
 				}
-				w.pop();
+				if (dbg) w.pop();
 			}
 		}
 	}
