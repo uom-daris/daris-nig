@@ -60,8 +60,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 
 	public SvcMBCHumanProjectMigrate() {
 		_defn = new Interface();
-		_defn.add(new Element("patient-id",StringType.DEFAULT, "A fake FMP patient ID for testing without FMP access.", 0, 1));
-		_defn.add(new Element("visit-id",StringType.DEFAULT, "A fake FMP visit ID for testing without FMP access.", 0, 1));
+		_defn.add(new Element("visit-id",StringType.DEFAULT, "A manually enetered FMP visit ID for when its ambiguous which visit to use.", 0, 1));
 		_defn.add(new Element("from", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate from.", 1, 1));
 		_defn.add(new Element("to", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate to. Defaults to 'to'", 0, 1));
 		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the first subject to consider (defaults to 1).", 0, 1));
@@ -120,14 +119,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		Boolean cloneContent = args.booleanValue("clone-content", false);
 		String resourceFile = args.stringValue("resource-file", FMP_CRED_REL_PATH);
 		//
-		String patientIDFMP = args.stringValue("patient-id");
 		String visitIDFMP = args.stringValue("visit-id");
-		if (patientIDFMP!=null && visitIDFMP==null) {
-			throw new Exception ("You must specify both patient-id and visit-id");
-		}
-		if (patientIDFMP==null && visitIDFMP!=null) {
-			throw new Exception ("You must specify both patient-id and visit-id");
-		}
 		//
 		Boolean copyRawContent = args.booleanValue("copy-raw",true);
 		//
@@ -138,20 +130,19 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		MBCFMP mbc = null;
 		String home = System.getProperty("user.home");
 		String path = home + resourceFile;
-		if (patientIDFMP==null) {
-			try {
-				w.push("FileMakerPro");
-				mbc = new MBCFMP(path);
-				FMPAccess fmp = mbc.getFMPAccess();
-				w.add("ip", fmp.getHostIP());
-				w.add("db", fmp.getDataBaseName());
-				w.add("user", fmp.getUserName());
-				w.pop();
-			} catch (Throwable tt) {
-				throw new Exception(
-						"Failed to establish JDBC connection to FileMakerPro with resource file  '" + path + "'.", tt);
-			}
+		try {
+			w.push("FileMakerPro");
+			mbc = new MBCFMP(path);
+			FMPAccess fmp = mbc.getFMPAccess();
+			w.add("ip", fmp.getHostIP());
+			w.add("db", fmp.getDataBaseName());
+			w.add("user", fmp.getUserName());
+			w.pop();
+		} catch (Throwable tt) {
+			throw new Exception(
+					"Failed to establish JDBC connection to FileMakerPro with resource file  '" + path + "'.", tt);
 		}
+
 
 		// Optional output CSV file
 		PluginService.Output output = null;
@@ -192,45 +183,37 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			w.push("fmp");
 
 			// Try to lookup in FMP or use given value for single shot testing
-			String patientIDFMP2 = null;
 			try {
-				if (patientIDFMP==null) {
-					patientIDFMP2 = findSubjectInFMP (executor(), subjectID, mbc, oldDICOMMeta, sb, w);
+				String patientIDFMP = findSubjectInFMP (executor(), subjectID, mbc, oldDICOMMeta, sb, w);
 
-					if (patientIDFMP2!=null) {
-						w.add("found", "true");
-						w.add("patient-id", patientIDFMP2);
-					} else {
-						w.add("found", "false");
-						// Create new Patient Record in FMP
-						if (!listOnly) {
-							createPatientInFMP (oldDICOMMeta, mbc);
-							patientIDFMP2 = findSubjectInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
-							if (patientIDFMP2!=null) {
-								w.add("patient-id", patientIDFMP2);
-								w.add("created", "true");
-							} else {
-								w.add("created", new String[]{"status", "failed"}, "false");
-							}
-						} else {
-							w.add("created", "false");
-						}
-					}
-					w.pop();
+				if (patientIDFMP!=null) {
+					w.add("found", "true");
+					w.add("patient-id", patientIDFMP);
 				} else {
-					w.add("found", "ID-given");
-					w.add("patient-id", patientIDFMP);	
-					w.pop();
-					patientIDFMP2 = patientIDFMP;
+					w.add("found", "false");
+					// Create new Patient Record in FMP
+					if (!listOnly) {
+						createPatientInFMP (oldDICOMMeta, mbc);
+						patientIDFMP = findSubjectInFMP (executor(), subjectID, mbc, oldDICOMMeta, null, null);
+						if (patientIDFMP!=null) {
+							w.add("patient-id", patientIDFMP);
+							w.add("created", "true");
+						} else {
+							w.add("created", new String[]{"status", "failed"}, "false");
+						}
+					} else {
+						w.add("created", "false");
+					}
 				}
+				w.pop();
 				sb.append("\n");
 
 				// Proceed now we have a FMP SUbject ID one way or the other
-				if (patientIDFMP2!=null) {
+				if (patientIDFMP!=null) {
 
 					// Now migrate the data for this Subject
 					if (!listOnly) {
-						migrateSubject (executor(), mbc, newProjectID, methodID, subjectID, oldSubjectName, oldDICOMMeta,  patientIDFMP2,  visitIDFMP, cloneContent, copyRawContent, w);
+						migrateSubject (executor(), mbc, newProjectID, methodID, subjectID, oldSubjectName, oldDICOMMeta,  patientIDFMP,  visitIDFMP, cloneContent, copyRawContent, w);
 					}
 				}
 			} catch (Throwable t) {
@@ -246,9 +229,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		}
 
 		// Close up FMP
-		if (patientIDFMP==null) {
-			mbc.closeConnection();
-		}
+		mbc.closeConnection();
 
 		// Write CSV file
 		if (outputs!=null && outputs.size()==1) {
@@ -257,7 +238,6 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			output = outputs.output(0);
 			output.setData(new ByteArrayInputStream(b), b.length, type);
 		}
-
 	}
 
 
@@ -426,9 +406,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 
 			// Create a visit record in FMP if needed.
 			FMPVisitHolder fmpVisitHolder = null;
-			if (visitIDFMP==null) {
-				fmpVisitHolder  = findOrCreate7TFMPVisit (executor, mbc, patientIDFMP, oldStudyID, w);
-			}
+			fmpVisitHolder  = findOrCreate7TFMPVisit (executor, mbc, patientIDFMP, visitIDFMP, oldStudyID, w);
 
 			// Find or create the new Study - dicom or raw in DaRIS
 			// We also update FMP with the new Study ID
@@ -447,7 +425,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 	}
 
 
-	private FMPVisitHolder findOrCreate7TFMPVisit  (ServiceExecutor executor, MBCFMP mbc, String fmpSubjectID, String oldStudyID, XmlWriter w) throws Throwable {
+	private FMPVisitHolder findOrCreate7TFMPVisit  (ServiceExecutor executor, MBCFMP mbc, String fmpSubjectID, String fmpVisitIDGiven, String oldStudyID, XmlWriter w) throws Throwable {
 		XmlDoc.Element oldStudyMeta = AssetUtil.getAsset(executor, oldStudyID, null);
 		XmlDoc.Element oldDICOM = oldStudyMeta.element("asset/meta/mf-dicom-study");
 		XmlDoc.Element oldRaw = oldStudyMeta.element("asset/meta/daris:siemens-raw-mr-study");
@@ -457,7 +435,8 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		String height = null;
 		String weight = null;
 		if (oldDICOM != null) {
-			vdate = oldDICOM.dateValue("sdate");
+			w.add("type", "DICOM");
+			vdate = oldDICOM.dateValue("sdate");    // Date and Time
 			height = oldDICOM.value("subject/size");   // metres (DICOM standard)
 			if (height!=null) {
 				Float heightf = Float.parseFloat(height);
@@ -466,33 +445,43 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			}
 			weight = oldDICOM.value("subject/weight");
 		} else if (oldRaw!=null) {
-			vdate = oldRaw.dateValue("date");
+			w.add("type", "Raw");
+			vdate = oldRaw.dateValue("date");    // Date only
 		}
 		w.add("date", vdate);
 
 		// Find visit by subject ID and date
-		// NB the raw date may not be the same as the acquisition date
+		// NB the raw date may not be the same as the acquisition date and at best is just a date, not date+time
 		// We should have only one visit that serves both the DICOM and the Raw data
 		// The DICOM Study is always the first one.  So it gets migrated first, and the
 		// visit gets created in FMP.  Then when the Raw study is migrated, it finds
 		// the visit already existing in FMP.
+		// In the situation that a raw study has multiple vsiit dates found, a null visit ID will
+		// be returned.  This must be handled manually.
 		Boolean created = false;
-		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, true);
+		Boolean useTime = true;
+		if (oldRaw!=null) useTime = false;
+		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, useTime, true);
+
+		// Insert manually provided visit ID if available and we can't find a visit
+		w.push("fmp");
 		if (fmpVisitID==null) {
-			fmpVisitID = mbc.create7TVisit(fmpSubjectID, vdate, height, weight, false);
-			w.push("fmp");
-			w.add("visit-id", new String[]{"status", "created"}, fmpVisitID);
-			String notes = "Auto created by DaRIS service nig.pssd.mbic.mr.human.project.migrate at " + DateUtil.todaysTime() + " during archive migration to the Subject-centric structure";
-			mbc.updateStringInVisit(fmpSubjectID, vdate, fmpVisitID, "MRIvisitnotes", notes,  "7TMR", false);
-			w.add("id", fmpSubjectID);
-			w.pop();
+			if (fmpVisitIDGiven!=null) {
+				fmpVisitID = fmpVisitIDGiven;
+				w.add("visit-id", new String[]{"status", "given"}, fmpVisitID);
+			} else {
+				fmpVisitID = mbc.create7TVisit(fmpSubjectID, vdate, height, weight, false);
+				w.add("visit-id", new String[]{"status", "created"}, fmpVisitID);
+				String notes = "Auto created by DaRIS service nig.pssd.mbic.mr.human.project.migrate at " + DateUtil.todaysTime() + " during archive migration to the Subject-centric structure";
+				mbc.updateStringInVisit(fmpSubjectID, vdate, fmpVisitID, "MRIvisitnotes", notes,  "7TMR", false);
+			}
 			created = true;
 		} else {
-			w.push("fmp");
 			w.add("visit-id", new String[]{"status", "found"}, fmpVisitID);
-			w.add("id", fmpSubjectID);
-			w.pop();		
 		}
+		w.add("id", fmpSubjectID);
+		w.pop();		
+
 		return new FMPVisitHolder(fmpSubjectID, fmpVisitID, created);
 	}
 
