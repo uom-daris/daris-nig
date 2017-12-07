@@ -60,7 +60,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 
 	public SvcMBCHumanProjectMigrate() {
 		_defn = new Interface();
-		_defn.add(new Element("visit-id",StringType.DEFAULT, "A manually enetered FMP visit ID for when its ambiguous which visit to use.", 0, 1));
+		_defn.add(new Element("visit-id",StringType.DEFAULT, "A manually entered FMP visit ID for when the service fails to find the visit ID (returns null usually because it's ambiguous).", 0, 1));
 		_defn.add(new Element("from", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate from.", 1, 1));
 		_defn.add(new Element("to", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate to. Defaults to 'to'", 0, 1));
 		_defn.add(new Element("idx", StringType.DEFAULT, "The start idx of the first subject to consider (defaults to 1).", 0, 1));
@@ -410,16 +410,18 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 
 			// Find or create the new Study - dicom or raw in DaRIS
 			// We also update FMP with the new Study ID
-			String newStudyID = findOrCreateStudy (executor, mbc, oldSubjectName, oldStudyID, newExMethodID,fmpVisitHolder, w);
+			if (fmpVisitHolder!=null) {
+				String newStudyID = findOrCreateStudy (executor, mbc, oldSubjectName, oldStudyID, newExMethodID,fmpVisitHolder, w);
 
-			// Now  find extant or clone the DataSets
-			findOrCloneDataSets (executor, patientIDFMP, fmpVisitHolder.fmpVisitID(), oldStudyID, newStudyID, cloneContent, copyRawContent,  w);
+				// Now  find extant or clone the DataSets
+				findOrCloneDataSets (executor, patientIDFMP, fmpVisitHolder.fmpVisitID(), oldStudyID, newStudyID, cloneContent, copyRawContent,  w);
 
-			// CHeck number of DataSets is correct
-			int nIn = nChildren (executor, oldStudyID, "om.pssd.dataset");
-			int nOut = nChildren (executor, newStudyID, "om.pssd.dataset");
-			w.add("datasets-in", nIn);
-			w.add("datasets-out", nOut);
+				// CHeck number of DataSets is correct
+				int nIn = nChildren (executor, oldStudyID, "om.pssd.dataset");
+				int nOut = nChildren (executor, newStudyID, "om.pssd.dataset");
+				w.add("datasets-in", nIn);
+				w.add("datasets-out", nOut);
+			}
 			w.pop();
 		}
 	}
@@ -470,18 +472,27 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 				fmpVisitID = fmpVisitIDGiven;
 				w.add("visit-id", new String[]{"status", "given"}, fmpVisitID);
 			} else {
-				fmpVisitID = mbc.create7TVisit(fmpSubjectID, vdate, height, weight, false);
-				w.add("visit-id", new String[]{"status", "created"}, fmpVisitID);
-				String notes = "Auto created by DaRIS service nig.pssd.mbic.mr.human.project.migrate at " + DateUtil.todaysTime() + " during archive migration to the Subject-centric structure";
-				mbc.updateStringInVisit(fmpSubjectID, vdate, fmpVisitID, "MRIvisitnotes", notes,  "7TMR", false);
+				if (oldDICOM!=null) {
+					fmpVisitID = mbc.create7TVisit(fmpSubjectID, vdate, height, weight, false);
+					w.add("visit-id", new String[]{"status", "created"}, fmpVisitID);
+					String notes = "Auto created by DaRIS service nig.pssd.mbic.mr.human.project.migrate at " + DateUtil.todaysTime() + " during archive migration to the Subject-centric structure";
+					mbc.updateStringInVisit(fmpSubjectID, vdate, fmpVisitID, "MRIvisitnotes", notes,  "7TMR", false);
+					created = true;
+				} else {
+					// We have a raw data set but we can't find the visit (probably ambiguous - there may be multiple DICOM visits but
+					// we only have a raw date, no time)). We should never have
+					// a raw visit without a DICOM one so we have no choice but to fail and the caller
+					// has to supply it manually.
+					w.add("visit-id", new String[]{"status", "not-found"}, "null");
+				}
 			}
-			created = true;
 		} else {
 			w.add("visit-id", new String[]{"status", "found"}, fmpVisitID);
 		}
 		w.add("id", fmpSubjectID);
 		w.pop();		
 
+		if (fmpVisitID==null) return null;
 		return new FMPVisitHolder(fmpSubjectID, fmpVisitID, created);
 	}
 
@@ -596,9 +607,9 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			}
 			executor.execute("nig.asset.doc.copy", dm.root());
 
-			// Finally, update the FMP visit ID with the new DaRIS Study ID and time.  We only do this
-			// If the visit was just created in FMP and its a DICOM Study (one FMP Visit accomodates both DICOM and Raw)
-			if (fmpVisitHolder.created() && isDICOM) {
+			// Finally, update the FMP visit ID with the new DaRIS Study ID and time.  We do this whether the VIsit
+			// was pre-existing or not, but only for DICOM  (one FMP Visit accomodates both DICOM and Raw)
+			if (isDICOM) {
 				mbc.updateStringInVisit(fmpVisitHolder.fmpPatientID(), null, fmpVisitHolder.fmpVisitID(), "MRDARIS_ID",  newStudyID, "7TMR", false);
 
 			}
