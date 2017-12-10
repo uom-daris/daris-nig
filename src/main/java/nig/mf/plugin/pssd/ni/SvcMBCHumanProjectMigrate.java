@@ -463,7 +463,12 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		Boolean created = false;
 		Boolean useTime = true;
 		if (oldRaw!=null) useTime = false;
-		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, useTime, true);
+		
+		// Allow a 20-min slop around the time for finding visits because often the
+		// times entered in FMP are 10-15 min after the first acquisition(they
+		// are often rounded up to the nearest hour)
+		Integer slop = -20;
+		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, useTime, slop, true);
 
 		// Insert manually provided visit ID if available and we can't find a visit
 		w.push("fmp");
