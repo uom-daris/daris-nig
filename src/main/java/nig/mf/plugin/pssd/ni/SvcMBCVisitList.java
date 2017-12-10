@@ -34,7 +34,7 @@ public class SvcMBCVisitList extends PluginService {
 	public SvcMBCVisitList() {
 		_defn = new Interface();
 		_defn.add(new Element("id", CiteableIdType.DEFAULT, "The citeable id of the Subject.", 1, 1));
-		_defn.add(new Element("type", StringType.DEFAULT, "The visit type: 'MR' or 'PETCT'", 1, 1));
+		_defn.add(new Element("type", StringType.DEFAULT, "The visit type: 'MR' (default) or 'PETCT'", 0, 1));
 	}
 
 	public String name() {
