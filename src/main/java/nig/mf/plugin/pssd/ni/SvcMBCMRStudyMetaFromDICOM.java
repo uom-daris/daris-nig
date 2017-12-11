@@ -35,7 +35,7 @@ public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 
 	@Override
 	public String name() {
-		return "nig.pssd.mbic.mr.study.metadata.set";
+		return "nig.pssd.mbic.mr.study.dicom.metadata.set";
 	}
 
 	@Override
@@ -94,7 +94,9 @@ public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 		if (accessionNumber!=null) {
 			dm = new XmlDocMaker("args");
 			dm.add("id", studyCID);
+			//
 			dm.add("other-id", new String[]{"type", TYPE}, accessionNumber);
+			w.add("other-id", new String[]{"type", TYPE}, accessionNumber);
 			executor().execute("om.pssd.study.update", dm.root());
 		}
 	}
