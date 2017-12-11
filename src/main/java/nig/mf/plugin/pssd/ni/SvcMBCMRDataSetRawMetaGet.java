@@ -17,18 +17,19 @@ import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
 
-public class SvcMBCMRRawDataSetFetchMeta extends PluginService {
+public class SvcMBCMRDataSetRawMetaGet extends PluginService {
 
 	private Interface _defn;
 
-	public SvcMBCMRRawDataSetFetchMeta() {
+	public SvcMBCMRDataSetRawMetaGet() {
 		_defn = new Interface();
 		_defn.add(new Element("id", CiteableIdType.DEFAULT, "The citeable asset id of the parent object.", 1, 1));
 	}
 
 	public String name() {
 
-		return "nig.pssd.mbic.mr.raw.dataset.fetch.meta";
+		return "nig.pssd.mbic.mr.dataset.raw.metadata.get";
+
 	}
 
 	public String description() {

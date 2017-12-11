@@ -16,18 +16,18 @@ import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
 
-public class SvcMBCMRRawStudyFetchDate extends PluginService {
+public class SvcMBCMRStudyRawMetaGet extends PluginService {
 
 	private Interface _defn;
 
-	public SvcMBCMRRawStudyFetchDate() {
+	public SvcMBCMRStudyRawMetaGet() {
 		_defn = new Interface();
 		_defn.add(new Element("id", CiteableIdType.DEFAULT, "The citeable asset id of the parent object.", 1, 1));
 	}
 
 	public String name() {
 
-		return "nig.pssd.mbic.mr.raw.study.fetch.date";
+		return "nig.pssd.mbic.mr.study.raw.metadata.get";
 	}
 
 	public String description() {
@@ -108,6 +108,7 @@ public class SvcMBCMRRawStudyFetchDate extends PluginService {
 						// Parse and get date from the data set
 						MRMetaData mm = new MRMetaData(din);
 						Date date = mm.getFoRDate();
+						String frameOfReference = mm.getFoR();
 
 						// Set on Study
 						String cid = CiteableIdUtil.idToCid(executor(), studyID);
@@ -116,7 +117,12 @@ public class SvcMBCMRRawStudyFetchDate extends PluginService {
 						dm.push("meta", new String[]{"action", "merge"});
 						dm.push("daris:siemens-raw-mr-study");
 						String sdate = DateUtil.formatDate(date, "dd-MMM-yyyy");
+						//
 						dm.add("date", sdate);
+						w.add("date", sdate);
+						//
+						w.add("for", frameOfReference);
+						//
 						dm.pop();
 						dm.pop();
 						executor().execute("om.pssd.study.update", dm.root());

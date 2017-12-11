@@ -9,7 +9,7 @@ import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
-public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
+public class SvcMBCMRStudyDICOMMetaGet extends PluginService {
 	
 	// THis is the type of the other-id.     It's ok to do this
 	// because this is an MBC service
@@ -18,7 +18,7 @@ public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 	//
 	private Interface _defn;
 
-	public SvcMBCMRStudyMetaFromDICOM() throws Throwable {
+	public SvcMBCMRStudyDICOMMetaGet() throws Throwable {
 
 		_defn = new Interface();
 		Interface.Element me = new Interface.Element("cid",
@@ -35,7 +35,7 @@ public class SvcMBCMRStudyMetaFromDICOM extends PluginService {
 
 	@Override
 	public String name() {
-		return "nig.pssd.mbic.mr.study.dicom.metadata.set";
+		return "nig.pssd.mbic.mr.study.dicom.metadata.get";
 	}
 
 	@Override
