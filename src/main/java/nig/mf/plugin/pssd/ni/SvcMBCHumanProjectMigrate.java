@@ -274,13 +274,14 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 					sex2 = "Other";
 				}
 			}
-			/*
+			
 			System.out.println("name=" + fn + " " + ln);
 			System.out.println("sex="+sex2);
 			System.out.println("dob="+dob);
-			 */
+		 
 			String notes = "Auto created by DaRIS service nig.pssd.mbic.mr.human.project.migrate at " + DateUtil.todaysTime() + " during archive migration to the Subject-centric structure";
-			mbc.createPatient(fn, ln, sex2, dob, notes);
+			mbc.createPatient(fn, ln, sex2, dob, notes, true);
+			System.out.println("Called mbc.createPatient");
 		}
 
 	}
@@ -331,6 +332,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 				}
 			}
 
+			System.out.println("fn,ln,sex2,dob="+fn+","+ln+","+sex2+","+dp.getDOB());
 			mbcID = mbc.findPatient(fn, ln, sex2, dp.getDOB());
 			//
 			if (sb!=null) {
@@ -367,8 +369,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		// FInd existing or create new Subject. We use mf-dicom-patient/id to find the Subject
 		// mf-dicom-patient must be there
 		DICOMPatient dp = new DICOMPatient(oldDICOMMeta);	
-		String newSubjectID = findOrCreateSubject (executor, patientIDFMP, methodID, oldSubjectID, dp, newProjectID);
-		w.add("new-id", newSubjectID);
+		String newSubjectID = findOrCreateSubject (executor, patientIDFMP, methodID, oldSubjectID, dp, newProjectID, w);
 		// Find the new ExMethod (it's auto created when the Subject is made)
 		Collection<String> newExMethodIDs = childrenIDs (executor, newSubjectID);
 		if (newExMethodIDs.size()>1) {
@@ -468,7 +469,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		// times entered in FMP are 10-15 min after the first acquisition(they
 		// are often rounded up to the nearest hour)
 		Integer slop = -20;
-		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, useTime, slop, true);
+		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, useTime, slop, false);
 
 		// Insert manually provided visit ID if available and we can't find a visit
 		w.push("fmp");
@@ -626,7 +627,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 
 
 	private String findOrCreateSubject (ServiceExecutor executor, String fmpSubjectID, String methodID, String oldSubjectID, 
-			DICOMPatient dp, String newProjectID) throws Throwable {
+			DICOMPatient dp, String newProjectID, XmlWriter w) throws Throwable {
 
 		// See if we can find the Subject pre-existing
 		XmlDocMaker dm = new XmlDocMaker("args");
@@ -639,6 +640,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		XmlDoc.Element r = executor.execute("asset.query", dm.root());
 		String newSubjectID = r.value("id");
 		if (newSubjectID!=null) {
+			w.add("new-id", new String[]{"Status", "found"}, newSubjectID);
 			return CiteableIdUtil.idToCid(executor, newSubjectID);
 		}
 
@@ -654,6 +656,8 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		dm.add("name", newSubjectName);
 		r = executor.execute("om.pssd.subject.create", dm.root());
 		newSubjectID = r.value("id");
+		w.add("new-id", new String[]{"Status", "created"}, newSubjectID);
+
 
 		// Now copy meta-data across
 		String from = CiteableIdUtil.cidToId(executor, oldSubjectID);

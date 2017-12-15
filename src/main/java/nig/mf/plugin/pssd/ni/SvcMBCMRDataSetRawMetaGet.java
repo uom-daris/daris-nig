@@ -23,7 +23,8 @@ public class SvcMBCMRDataSetRawMetaGet extends PluginService {
 
 	public SvcMBCMRDataSetRawMetaGet() {
 		_defn = new Interface();
-		_defn.add(new Element("id", CiteableIdType.DEFAULT, "The citeable asset id of the parent object.", 1, 1));
+		_defn.add(new Element("cid", CiteableIdType.DEFAULT, "The citeable asset id of the parent object.", 1, 1));
+		_defn.add(new Element("id", CiteableIdType.DEFAULT, "The  asset id of the parent object.", 0, 1));
 	}
 
 	public String name() {
@@ -67,7 +68,18 @@ public class SvcMBCMRDataSetRawMetaGet extends PluginService {
 			throws Throwable {
 
 		// Parse arguments
-		String pid = args.stringValue("id");
+		String cid = args.stringValue("cid");
+		String id = args.stringValue("id");
+		if (cid==null && id==null) {
+			throw new Exception ("You must supply 'id' or 'cid'");
+		}
+		if (cid!=null && id!=null) {
+			throw new Exception ("You must supply 'id' or 'cid'");
+		}
+		String pid= cid;
+		if (id!=null) {
+			pid = CiteableIdUtil.idToCid(executor(), id);
+		}
 		//
 		// Find raw studies
 		XmlDocMaker dm = new XmlDocMaker("args");
