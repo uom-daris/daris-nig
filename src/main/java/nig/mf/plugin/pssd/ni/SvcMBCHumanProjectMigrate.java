@@ -468,7 +468,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		// Allow a 20-min slop around the time for finding visits because often the
 		// times entered in FMP are 10-15 min after the first acquisition(they
 		// are often rounded up to the nearest hour)
-		Integer slop = -20;
+		Integer slop = -30;
 		fmpVisitID = mbc.find7TMRVisit (fmpSubjectID, vdate, useTime, slop, false);
 
 		// Insert manually provided visit ID if available and we can't find a visit
@@ -640,8 +640,10 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		XmlDoc.Element r = executor.execute("asset.query", dm.root());
 		String newSubjectID = r.value("id");
 		if (newSubjectID!=null) {
-			w.add("new-id", new String[]{"Status", "found"}, newSubjectID);
-			return CiteableIdUtil.idToCid(executor, newSubjectID);
+			String cid = CiteableIdUtil.idToCid(executor, newSubjectID);
+
+			w.add("new-id", new String[]{"status", "found"}, cid);
+			return cid;
 		}
 
 		// Create the new Subject and ExMethod  if needed
@@ -656,7 +658,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		dm.add("name", newSubjectName);
 		r = executor.execute("om.pssd.subject.create", dm.root());
 		newSubjectID = r.value("id");
-		w.add("new-id", new String[]{"Status", "created"}, newSubjectID);
+		w.add("new-id", new String[]{"status", "created"}, newSubjectID);
 
 
 		// Now copy meta-data across
