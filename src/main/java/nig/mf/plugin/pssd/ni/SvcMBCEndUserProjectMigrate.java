@@ -185,6 +185,8 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			if (hasDuplicates) {
 				mergeDuplicates(executor, projectCID, methodCID,  subjectCID, duplicateSubjects, handled, w);
 			} else {
+				PluginTask.checkIfThreadTaskAborted();
+
 				// Work out if this is a 7T Human 
 				DICOMPatient dp = new DICOMPatient(dicomMeta);
 				String originalPatientID = dp.getID();    // H number
@@ -192,7 +194,10 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 					// We have a 7T Human
 
 					// Look up the FMP-based patient ID from the archive by finding the H Number in a Study and then finding its parent Subject
-					String archivePatientID = findSubjectInArchive (executor, originalPatientID);
+					String archiveSubjectCID = findSubjectInArchive (executor, originalPatientID);
+					XmlDoc.Element archiveSubjectAsset = AssetUtil.getAsset(executor, archiveSubjectCID, null);
+					String archivePatientID = archiveSubjectAsset.value("asset/meta/mf-dicom-patient/id");
+					w.add("archive-patient-id", archivePatientID);
 
 					// Update Subject meta-data
 					updateSubjectMetaData (executor, subjectCID, archivePatientID, originalPatientID);
@@ -204,8 +209,12 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 					// Update Study Meta-data
 					w.push("study");
 					for (String studyCID : studyCIDs) {
+						w.add("id", studyCID);
+						PluginTask.checkIfThreadTaskAborted();
+
 						// FInd the FMP generated visit ID
 						String archiveVisitID = findVisitIDFromArchive (executor, studyCID);
+						w.add("archive-visit-id", archiveVisitID);
 
 						// Update the Study meta-data with the old H number and the new visit ID
 						updateStudyMetaData (executor, studyCID, originalPatientID, archiveVisitID);
@@ -268,7 +277,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			// Migrate to new parent
 			XmlDocMaker dm = new XmlDocMaker("args");
 			dm.add("cid", studyCID);
-			dm.add("pid", subjectCID);
+			dm.add("to", subjectCID);
 			String newStudyCID = null;
 			XmlDoc.Element r = executor.execute("daris.study.copy", dm.root());
 			newStudyCID = r.value("study/@cid");
@@ -317,6 +326,8 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		Collection<String> dataSetCIDs = findDataSets (executor, studyCID);
 		String t = "";
 		for (String dataSetCID : dataSetCIDs) {
+			PluginTask.checkIfThreadTaskAborted();
+
 			// Modify the DICOM meta-data 
 			XmlDocMaker dm = new XmlDocMaker("args");
 			dm.add("cid", dataSetCID);
@@ -353,10 +364,10 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 
 		// Get Archive Study asset
 		XmlDoc.Element archiveStudyMeta = AssetUtil.getAsset(executor, archiveStudyCID, null);
+		XmlDoc.Element t = archiveStudyMeta.element("asset/meta/daris:pssd-study");
 
 		// Now fetch the FMP Visit ID
-		String visitID = archiveStudyMeta.value("asset/meta/daris:pssd-study/other-id[type='" + OTHER_ID_TYPE_LEGACY + "']");
-		return visitID;	
+		return archiveStudyMeta.value("asset/meta/daris:pssd-study/other-id[@type='" + OTHER_ID_TYPE + "']");
 	}
 
 	private Collection<String> findDataSets (ServiceExecutor executor, String studyCID) throws Throwable {
@@ -458,6 +469,8 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			// If it matches the Subject ID for the Subject of interest, we have a duplicate.
 			Collection<String> subjectCIDs = findSubjects (executor, projectCID);
 			for (String subjectCID2 : subjectCIDs) {
+				PluginTask.checkIfThreadTaskAborted();
+
 				// Exclude this subject
 				if (!subjectCID.equals(subjectCID2)) {
 
