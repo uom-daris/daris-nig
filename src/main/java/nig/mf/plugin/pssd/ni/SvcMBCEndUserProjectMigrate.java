@@ -48,6 +48,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		_defn = new Interface();
 		_defn.add(new Element("pid", CiteableIdType.DEFAULT, "The citeable asset id of the Project to migrate from.", 1, 1));
 		_defn.add(new Element("list-only", BooleanType.DEFAULT, "Just list, don't migrate any data (defaults to true).", 0, 1));
+		_defn.add(new Element("clean-up", BooleanType.DEFAULT, "Clean up (destroy) Subjects that are merged into one new one (default false).", 0, 1));
 	}
 
 	public String name() {
@@ -92,6 +93,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		// Parse arguments
 		String projectCID = args.stringValue("pid");
 		Boolean listOnly = args.booleanValue("list-only", true);
+		Boolean cleanUp = args.booleanValue("clean-up", false);
 		//
 		XmlDoc.Element projectMeta = AssetUtil.getAsset(executor(), projectCID, null);
 		String methodCID = projectMeta.value("asset/meta/daris:pssd-project/method/id");
@@ -129,7 +131,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			w.add("id", subjectID);
 			if (!handled.get(subjectID)) {
 				// OK This one is still in our list.  We didn't destroy it in a duplicate merge process
-				migrateSubject (executor(), listOnly, projectCID, methodCID, subjectID, handled, newSubjects, w);
+				migrateSubject (executor(), cleanUp, listOnly, projectCID, methodCID, subjectID, handled, newSubjects, w);
 			} else {
 				w.add("handled", "true");
 			}
@@ -150,7 +152,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 	}
 
 
-	private void  migrateSubject (ServiceExecutor executor,  Boolean listOnly, String projectCID, String methodCID, String subjectCID, 
+	private void  migrateSubject (ServiceExecutor executor,  Boolean cleanUp, Boolean listOnly, String projectCID, String methodCID, String subjectCID, 
 			HashMap<String,Boolean> handled, Collection<String> newSubjects, XmlWriter w) throws Throwable {
 		PluginTask.checkIfThreadTaskAborted();
 
@@ -183,7 +185,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		// If it does have duplicates, we handle them all now by making a new Subject and migrating all data to it
 		if (!listOnly) {
 			if (hasDuplicates) {
-				mergeDuplicates(executor, projectCID, methodCID,  subjectCID, duplicateSubjects, handled, w);
+				mergeDuplicates(executor, projectCID, methodCID,  subjectCID, duplicateSubjects, handled, cleanUp, w);
 			} else {
 				PluginTask.checkIfThreadTaskAborted();
 
@@ -233,11 +235,16 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 
 
 	private void mergeDuplicates (ServiceExecutor executor, String projectCID, String methodCID, String subjectCID, 
-			Collection<ProjectPair> duplicateSubjects,  HashMap<String,Boolean> handled, XmlWriter w) throws Throwable {
+			Collection<ProjectPair> duplicateSubjects,  HashMap<String,Boolean> handled, Boolean cleanUp, XmlWriter w) throws Throwable {
 
+		// Fetch SUbject asset
+		XmlDoc.Element r = AssetUtil.getAsset(executor, subjectCID, null);
+		XmlDoc.Element dicomMeta = r.element("asset/meta/mf-dicom-patient");
+		DICOMPatient dp = new DICOMPatient(dicomMeta);
+		String patientID = dp.getID();         // The H Number
 
-		// We need to know the new patient ID. For 7T Humans, its contained in the ProjectPair Objects.
-		// For other Subject types, those are null, and we just need the patient ID as it was on the origina;
+		// We need to know the new patient ID. For 7T Humans, it's contained in the ProjectPair Objects.
+		// For other Subject types, those are null, and we just need the patient ID as it was on the original;
 		// We can use the first duplicate subject container objects to work this out, as the information
 		// is duplicated
 		Iterator<ProjectPair> it = duplicateSubjects.iterator();	
@@ -248,31 +255,62 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		String archivePatientID = pp.getArchivePatientID();
 
 		// Create a new Subject and update the patient ID if needed for 7T HUmans
-		String newSubjectCID = createSubject (executor, projectCID, methodCID, subjectCID, archivePatientID, w);
+		String newSubjectCID = createSubject (executor, projectCID, methodCID, subjectCID, patientID, archivePatientID, w);
 		w.add("new-id", new String[]{"status", "created"}, newSubjectCID);
 
 		// Migrate the Studies over and update the meta-data also (indexed and DICOM).
 		//
 		// First the primary Subject Studies
 		Collection<String> studyCIDs = findStudies(executor, subjectCID);
-		migrateStudies (executor, newSubjectCID, studyCIDs, pp.getPatientID(), archivePatientID, w);
+		w.push("original");
+		w.add("subject-id", subjectCID);
+		w.add("patient-id", patientID);
+		w.add("archive-patient-id", archivePatientID);
+		migrateStudies (executor, newSubjectCID, studyCIDs, patientID, archivePatientID, w);
+		w.pop();
 		handled.put(subjectCID, true);
 
 		// Now the duplicate Subject Studies
 		for (ProjectPair duplicateSubject : duplicateSubjects) {
+			w.push("duplicate");
+			w.add("subject-id", duplicateSubject.getSubjectCID());
+			w.add("patient-id", duplicateSubject.getPatientID());
+			w.add("archive-subject-id", duplicateSubject.getArchiveSubjectCID());
+			w.add("archive-patient-id", duplicateSubject.getArchivePatientID());
 			studyCIDs = findStudies (executor, duplicateSubject.getSubjectCID());
 			migrateStudies (executor, newSubjectCID, studyCIDs, duplicateSubject.getPatientID(), archivePatientID, w);
 			handled.put(duplicateSubject.getSubjectCID(), true);
+			w.pop();
 		}
 
-		// TBD destroy old Subjects
+		// Clean up the original merged Subjects
+		if (cleanUp) {
+			w.push("destroyed");
+			destroyObject (executor, subjectCID);
+			w.add("subject", subjectCID);
+			for (ProjectPair duplicateSubject : duplicateSubjects) {
+				destroyObject (executor, duplicateSubject.getSubjectCID());
+				w.add("subject", duplicateSubject.getSubjectCID());
+			}
+			w.pop();
+		}
+	}
+	
+	private void destroyObject (ServiceExecutor executor, String cid) throws Throwable {
+		XmlDocMaker dm = new XmlDocMaker("args");
+		dm.add("cid", cid);
+		executor.execute("om.pssd.object.destroy", dm.root());
 	}
 
 	private void migrateStudies (ServiceExecutor executor, String subjectCID, Collection<String> studyCIDs,
 			String originalPatientID, String archivePatientID, XmlWriter w) throws Throwable {
 		if (studyCIDs==null) return;
 		w.push("study");
+
+		// The Studies passed in all come from one Subject. So they all pertain to the same
+		// original H Number (originalPatientID);
 		for (String studyCID : studyCIDs) {
+			w.add("original-patient-id", originalPatientID);
 
 			// Migrate to new parent
 			XmlDocMaker dm = new XmlDocMaker("args");
@@ -287,6 +325,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 				// We have a 7T Human so we can set the meta-data more precisely
 				// For non 7T Humans, there are no meta-data updates to make
 				String archiveVisitID = findVisitIDFromArchive (executor, studyCID);
+				w.add("archive-visit-id", archiveVisitID);
 				updateStudyMetaData (executor, newStudyCID, originalPatientID, archiveVisitID);
 				w.add("study-meta-data-updated", newStudyCID);
 
@@ -389,7 +428,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 	}
 
 	private String createSubject (ServiceExecutor executor, String projectCID,  String methodCID, String oldSubjectCID, 
-			String archivePatientID, XmlWriter w) throws Throwable {
+			String patientID, String archivePatientID, XmlWriter w) throws Throwable {
 
 		// TBD set subject name ??
 
@@ -404,7 +443,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		// Update the patient ID. We only do this for 7T Humans for which the new ID
 		// is the one allocated by FMP
 		if (archivePatientID!=null) {
-			updateSubjectMetaData (executor, newSubjectCID, archivePatientID, null);
+			updateSubjectMetaData (executor, newSubjectCID, archivePatientID, patientID);
 		}
 		return newSubjectCID;
 
@@ -418,6 +457,12 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		dm.push("mf-dicom-patient", new String[]{"ns", "pssd.private"});
 		dm.add("id", newPatientID);
 		dm.pop();
+		// In the Archive the name is <FMP Patient ID>-<LastName>. Since, in general, the
+		// Subjects are anonmymized  in end-user projects, we just set the name to the 
+		// FMP Patient iD
+		dm.push("daris:pssd-object");
+		dm.add("name", newPatientID); 
+		dm.pop();
 
 		// We also transfer the FMP SUbject ID into the identity meta-data
 		dm.push("nig-daris:pssd-identity", new String[]{"ns", "pssd.public"});
@@ -427,7 +472,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		dm.pop();
 		executor.execute("asset.set", dm.root());
 
-		// Remove legacy ID (if not it does not cause exception)
+		// Remove legacy ID (if not existing it does not cause exception)
 		if (oldPatientID!=null) {
 			dm = new XmlDocMaker("args");
 			dm.add("cid", subjectCID);
@@ -478,8 +523,8 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 					if (!isNewSubject(subjectCID2, newSubjects)) {
 
 						// Find its patient ID (H number)
-						XmlDoc.Element asset = AssetUtil.getAsset(executor, subjectCID2, null);
-						XmlDoc.Element dicomMeta2 =  asset.element("asset/meta/mf-dicom-patient");
+						XmlDoc.Element asset2 = AssetUtil.getAsset(executor, subjectCID2, null);
+						XmlDoc.Element dicomMeta2 =  asset2.element("asset/meta/mf-dicom-patient");
 						if (dicomMeta2==null) {
 							throw new Exception ("THe DICOM meta-data on subject " + subjectCID2 + " is missing");
 						}
@@ -487,10 +532,10 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 						String patientID2 = dp2.getID();
 						if (patientID2.length()>=3 && patientID2.substring(0, 3).equals("H00")) {
 							// If 7T Human handle
-							// Look up in Archive
+							// Look up in Archive via H Number
 							String archiveSubjectCID2 = findSubjectInArchive (executor, patientID2);
 							if (archiveSubjectCID2==null) {
-								// What to do ?
+								// TBD What to do ?
 							}
 
 							// Add duplicate to list
