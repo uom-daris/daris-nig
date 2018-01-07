@@ -126,24 +126,6 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		XmlDoc.Element projectMeta = AssetUtil.getAsset(executor(), oldProjectID, null);
 		String methodID = projectMeta.value("asset/meta/daris:pssd-project/method/id");
 
-		// OPen FMP
-		MBCFMP mbc = null;
-		String home = System.getProperty("user.home");
-		String path = home + resourceFile;
-		try {
-			w.push("FileMakerPro");
-			mbc = new MBCFMP(path);
-			FMPAccess fmp = mbc.getFMPAccess();
-			w.add("ip", fmp.getHostIP());
-			w.add("db", fmp.getDataBaseName());
-			w.add("user", fmp.getUserName());
-			w.pop();
-		} catch (Throwable tt) {
-			throw new Exception(
-					"Failed to establish JDBC connection to FileMakerPro with resource file  '" + path + "'.", tt);
-		}
-
-
 		// Optional output CSV file
 		PluginService.Output output = null;
 		String type = "text/csv";
@@ -168,6 +150,26 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 		Collection<String> subjectIDs = r.values("object/@cid");
 
 		for (String subjectID : subjectIDs) {
+			// OPen FMP. We do it inside the loop incase there are issues holding the conneciotn open for long periods.
+			// There is some evidence of this !
+			MBCFMP mbc = null;
+			String home = System.getProperty("user.home");
+			String path = home + resourceFile;
+			try {
+				w.push("FileMakerPro");
+				mbc = new MBCFMP(path);
+				FMPAccess fmp = mbc.getFMPAccess();
+				w.add("ip", fmp.getHostIP());
+				w.add("db", fmp.getDataBaseName());
+				w.add("user", fmp.getUserName());
+				w.pop();
+			} catch (Throwable tt) {
+				throw new Exception(
+						"Failed to establish JDBC connection to FileMakerPro with resource file  '" + path + "'.", tt);
+			}
+
+			//
+			
 			PluginTask.checkIfThreadTaskAborted();
 
 			// Fetch asset meta
@@ -226,11 +228,12 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 				w.pop();
 			}
 			w.pop();
+
+			// Close up FMP
+			mbc.closeConnection();
+
+
 		}
-
-		// Close up FMP
-		mbc.closeConnection();
-
 		// Write CSV file
 		if (outputs!=null && outputs.size()==1) {
 			String os = sb.toString();
@@ -332,7 +335,6 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 				}
 			}
 
-			System.out.println("fn,ln,sex2,dob="+fn+","+ln+","+sex2+","+dp.getDOB());
 			mbcID = mbc.findPatient(fn, ln, sex2, dp.getDOB());
 			//
 			if (sb!=null) {
