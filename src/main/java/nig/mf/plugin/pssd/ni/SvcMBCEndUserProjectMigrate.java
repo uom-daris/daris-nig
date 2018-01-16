@@ -210,21 +210,25 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 
 					// Update Study Meta-data
 					w.push("study");
-					for (String studyCID : studyCIDs) {
-						w.add("id", studyCID);
-						PluginTask.checkIfThreadTaskAborted();
+					if (studyCIDs!=null) {
+						for (String studyCID : studyCIDs) {
+							w.add("id", studyCID);
+							PluginTask.checkIfThreadTaskAborted();
 
-						// FInd the FMP generated visit ID
-						String archiveVisitID = findVisitIDFromArchive (executor, studyCID);
-						w.add("archive-visit-id", archiveVisitID);
+							// FInd the FMP generated visit ID. It's possible we can't find it.
+							String archiveVisitID = findVisitIDFromArchive (executor, studyCID);
+							if (archiveVisitID!=null) {
+								w.add("archive-visit-id", archiveVisitID);
 
-						// Update the Study meta-data with the old H number and the new visit ID
-						updateStudyMetaData (executor, studyCID, originalPatientID, archiveVisitID);
-						w.add("study-meta-data-updated", studyCID);
+								// Update the Study meta-data with the old H number and the new visit ID
+								updateStudyMetaData (executor, studyCID, originalPatientID, archiveVisitID);
+								w.add("study-meta-data-updated", studyCID);
 
-						// Update the DAtaSets for this Study so that the AccessionNumber is set to the FMP visit ID
-						String t = updateDataSetMetaData (executor, studyCID, archivePatientID, archiveVisitID);			
-						w.add("datasets-meta-data-updated",  t);
+								// Update the DAtaSets for this Study so that the AccessionNumber is set to the FMP visit ID
+								String t = updateDataSetMetaData (executor, studyCID, archivePatientID, archiveVisitID);			
+								w.add("datasets-meta-data-updated",  t);
+							}
+						}
 					}
 					w.pop();
 				}
@@ -295,7 +299,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			w.pop();
 		}
 	}
-	
+
 	private void destroyObject (ServiceExecutor executor, String cid) throws Throwable {
 		XmlDocMaker dm = new XmlDocMaker("args");
 		dm.add("cid", cid);
@@ -324,14 +328,17 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			if (archivePatientID!=null) {
 				// We have a 7T Human so we can set the meta-data more precisely
 				// For non 7T Humans, there are no meta-data updates to make
+				// We might not find it in the archive if an error was made (not sent)
 				String archiveVisitID = findVisitIDFromArchive (executor, studyCID);
-				w.add("archive-visit-id", archiveVisitID);
-				updateStudyMetaData (executor, newStudyCID, originalPatientID, archiveVisitID);
-				w.add("study-meta-data-updated", newStudyCID);
+				if (archiveVisitID!=null) {
+					w.add("archive-visit-id", archiveVisitID);
+					updateStudyMetaData (executor, newStudyCID, originalPatientID, archiveVisitID);
+					w.add("study-meta-data-updated", newStudyCID);
 
-				// Find the DAtaSets for this Study
-				String t = updateDataSetMetaData (executor, newStudyCID, archivePatientID, archiveVisitID);			
-				w.add("datasets-meta-data-updated",  t);
+					// Find the DAtaSets for this Study
+					String t = updateDataSetMetaData (executor, newStudyCID, archivePatientID, archiveVisitID);			
+					w.add("datasets-meta-data-updated",  t);
+				}
 			}
 		}
 		w.pop();
@@ -382,6 +389,11 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			}
 			executor.execute("daris.dicom.metadata.set", dm.root());
 			t += dataSetCID + " ";
+
+			// Prune DataSet
+			dm = new XmlDocMaker("args");
+			dm.add("id", CiteableIdUtil.cidToId(executor, dataSetCID));
+			executor.execute("asset.prune", dm.root());
 		}
 		return t;
 	}
@@ -400,6 +412,7 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		dm.add("action", "get-cid");
 		XmlDoc.Element r = executor.execute("asset.query", dm.root());
 		String archiveStudyCID = r.value("cid");
+		if (archiveStudyCID==null) return null;   // We didn't find in archive
 
 		// Get Archive Study asset
 		XmlDoc.Element archiveStudyMeta = AssetUtil.getAsset(executor, archiveStudyCID, null);
@@ -479,6 +492,9 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			dm.push("meta", new String[]{"action", "remove"});
 			dm.push("nig-daris:pssd-identity", new String[]{"ns", "pssd.public"});
 			dm.add("id", new String[]{"type", "Melbourne Brain Centre Imaging Unit 7T"}, oldPatientID);
+			dm.pop();
+			dm.push("nig-daris:pssd-identity", new String[]{"ns", "pssd.public"});
+			dm.add("id", new String[]{"type", "Other"}, oldPatientID);
 			dm.pop();
 			dm.pop();
 			executor.execute("asset.set", dm.root());
