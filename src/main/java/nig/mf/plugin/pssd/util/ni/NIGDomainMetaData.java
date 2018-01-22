@@ -403,7 +403,8 @@ public class NIGDomainMetaData extends DomainMetaData {
 				typeID = "Melbourne Brain Centre Imaging Unit"; 
 			} else if (scanFac.equals(MBCIU_FACILITY_7T)) {
 				// This is the MBC ImagingUnit 7T
-				typeID = "Melbourne Brain Centre Imaging Unit 7T";
+				// PET/CT and 7T now combined
+				typeID = "Melbourne Brain Centre Imaging Unit";
 			} else if (scanFac.equals(RHH_FACILITY)) {
 				typeID = "Royal Hobart Hospital";
 			} else if (scanFac.equals(LGH_FACILITY)) {
