@@ -9,7 +9,7 @@ import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
-public class SvcMBCMRStudyDICOMMetaGet extends PluginService {
+public class SvcMBCStudyDICOMMetaGet extends PluginService {
 	
 	// THis is the type of the other-id.     It's ok to do this
 	// because this is an MBC service
@@ -18,7 +18,7 @@ public class SvcMBCMRStudyDICOMMetaGet extends PluginService {
 	//
 	private Interface _defn;
 
-	public SvcMBCMRStudyDICOMMetaGet() throws Throwable {
+	public SvcMBCStudyDICOMMetaGet() throws Throwable {
 
 		_defn = new Interface();
 		Interface.Element me = new Interface.Element("cid",
@@ -35,12 +35,12 @@ public class SvcMBCMRStudyDICOMMetaGet extends PluginService {
 
 	@Override
 	public String name() {
-		return "nig.pssd.mbic.mr.study.dicom.metadata.get";
+		return "nig.pssd.mbic.study.dicom.metadata.get";
 	}
 
 	@Override
 	public String description() {
-		return "Fetches the AccessionNumber from DICOM header and locates in daris:pssd-study/other-id with the correct type.";
+		return "Fetches the AccessionNumber from DICOM header and locates in daris:pssd-study/other-id with the correct type (Melbroune Brain Centre Imaging Unit).";
 	}
 
 	@Override
