@@ -163,23 +163,33 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 			throw new Exception ("THe DICOM meta-data on subject " + subjectCID + " is missing");
 		}
 		w.add(dicomMeta);
+		DICOMPatient dp = new DICOMPatient(dicomMeta);
+
 
 
 		// Determine if this SUbject has any duplicates in this project
 		// For 7T Humans, we use the H number (study based). We look it up in the Human archive
 		// project and find its unique Patient ID.
 		// For other Subjects, we just use the Patient ID and look for it elsewhere in the projects
-		Collection<ProjectPair> duplicateSubjects = findDuplicates (executor, projectCID, subjectCID, handled, newSubjects, dicomMeta);
-		Boolean hasDuplicates = !(duplicateSubjects.isEmpty());
-		if (hasDuplicates) {
-			w.push("duplicates", new String[]{"status", "some"});
-			for (ProjectPair duplicateSubject : duplicateSubjects) {
-				w.add("duplicate", new String[]{"archive-subject", duplicateSubject.getArchiveSubjectCID(), "archive-patient-id", duplicateSubject.getArchivePatientID(), "patient-id", duplicateSubject.getPatientID()}, duplicateSubject.getSubjectCID());
-			}
+		Collection<ProjectPair> duplicateSubjects = findDuplicates (executor, projectCID, subjectCID, handled, newSubjects, dp);
+		Boolean hasDuplicates = false;
+		if (duplicateSubjects==null) {
+			// We could not find the DICOM patient ID on a Study (the H number) in the archive
+			w.push("duplicates", new String[]{"status", "failed"});
+			w.add("patient-id", new String[]{"status", "not-found-in-archive"}, dp.getID());
 			w.pop();
 		} else {
-			w.push("duplicates", new String[]{"status", "none"});
-			w.pop();
+			hasDuplicates = !(duplicateSubjects.isEmpty());
+			if (hasDuplicates) {
+				w.push("duplicates", new String[]{"status", "some"});
+				for (ProjectPair duplicateSubject : duplicateSubjects) {
+					w.add("duplicate", new String[]{"archive-subject", duplicateSubject.getArchiveSubjectCID(), "archive-patient-id", duplicateSubject.getArchivePatientID(), "patient-id", duplicateSubject.getPatientID()}, duplicateSubject.getSubjectCID());
+				}
+				w.pop();
+			} else {
+				w.push("duplicates", new String[]{"status", "none"});
+				w.pop();
+			}
 		}
 
 		// If it does have duplicates, we handle them all now by making a new Subject and migrating all data to it
@@ -190,7 +200,6 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 				PluginTask.checkIfThreadTaskAborted();
 
 				// Work out if this is a 7T Human 
-				DICOMPatient dp = new DICOMPatient(dicomMeta);
 				String originalPatientID = dp.getID();    // H number
 				if (originalPatientID.length()>=3 && originalPatientID.substring(0, 3).equals("H00")) {
 					// We have a 7T Human
@@ -209,9 +218,9 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 					Collection<String> studyCIDs = findStudies (executor, subjectCID);
 
 					// Update Study Meta-data
-					w.push("study");
 					if (studyCIDs!=null) {
 						for (String studyCID : studyCIDs) {
+							w.push("study");
 							w.add("id", studyCID);
 							PluginTask.checkIfThreadTaskAborted();
 
@@ -227,10 +236,12 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 								// Update the DAtaSets for this Study so that the AccessionNumber is set to the FMP visit ID
 								String t = updateDataSetMetaData (executor, studyCID, archivePatientID, archiveVisitID);			
 								w.add("datasets-meta-data-updated",  t);
+							} else {
+								w.add("archive-visit-id", "not-found");
 							}
+							w.pop();
 						}
 					}
-					w.pop();
 				}
 			}
 		}
@@ -372,28 +383,34 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 		Collection<String> dataSetCIDs = findDataSets (executor, studyCID);
 		String t = "";
 		for (String dataSetCID : dataSetCIDs) {
+			XmlDoc.Element r = AssetUtil.getAsset(executor, dataSetCID, null);
+			XmlDoc.Element dicomMeta = r.element("asset/meta/mf-dicom-series");
 			PluginTask.checkIfThreadTaskAborted();
 
 			// Modify the DICOM meta-data 
-			XmlDocMaker dm = new XmlDocMaker("args");
-			dm.add("cid", dataSetCID);
-			// Write the FMP subject ID into Patient ID
-			dm.push("element", new String[]{"action", "merge", "tag", "00100020"});
-			dm.add("value", patientID);
-			dm.pop();
-			// Write the FMP visit ID into the Accession Number
-			if (visitID!=null)  {
-				dm.push("element", new String[]{"action", "merge", "tag", "00080050"});
-				dm.add("value", visitID);
-				dm.pop();
-			}
-			executor.execute("daris.dicom.metadata.set", dm.root());
-			t += dataSetCID + " ";
+			if (dicomMeta!=null) {
+				XmlDocMaker dm = new XmlDocMaker("args");
+				dm.add("cid", dataSetCID);
+				// Write the FMP subject ID into Patient ID
+				if (patientID!=null) {
+					dm.push("element", new String[]{"action", "merge", "tag", "00100020"});
+					dm.add("value", patientID);
+					dm.pop();
+				}
+				// Write the FMP visit ID into the Accession Number
+				if (visitID!=null)  {
+					dm.push("element", new String[]{"action", "merge", "tag", "00080050"});
+					dm.add("value", visitID);
+					dm.pop();
+				}
+				executor.execute("daris.dicom.metadata.set", dm.root());
+				t += dataSetCID + " ";
 
-			// Prune DataSet
-			dm = new XmlDocMaker("args");
-			dm.add("id", CiteableIdUtil.cidToId(executor, dataSetCID));
-			executor.execute("asset.prune", dm.root());
+				// Prune DataSet
+				dm = new XmlDocMaker("args");
+				dm.add("id", CiteableIdUtil.cidToId(executor, dataSetCID));
+				executor.execute("asset.prune", dm.root());
+			}
 		}
 		return t;
 	}
@@ -512,19 +529,23 @@ public class SvcMBCEndUserProjectMigrate extends PluginService {
 	 * @return
 	 * @throws Throwable
 	 */
-	private Collection<ProjectPair> findDuplicates (ServiceExecutor executor, String projectCID, String subjectCID, HashMap<String,Boolean> handled, Collection<String> newSubjects, XmlDoc.Element dicomMeta) throws Throwable {
+	private Collection<ProjectPair> findDuplicates (ServiceExecutor executor, String projectCID, String subjectCID, HashMap<String,Boolean> handled, Collection<String> newSubjects, DICOMPatient dp) throws Throwable {
+
 		ArrayList<ProjectPair> duplicates = new ArrayList<ProjectPair>();
 
-		DICOMPatient dp = new DICOMPatient(dicomMeta);
 		String patientID = dp.getID();
 		if (patientID.length()>=3 && patientID.substring(0, 3).equals("H00")) {
 
 			// We have a 7T Human number
 			// In the archive, find the Subject parent for a Study with this patient ID (an H Number) as a Study ID
 			String archiveSubjectCID = findSubjectInArchive (executor, patientID);
+			if (archiveSubjectCID==null) return null;
+			//
 			XmlDoc.Element archiveSubjectAsset = AssetUtil.getAsset(executor,  archiveSubjectCID,  null);
 			XmlDoc.Element archiveDICOMMeta =  archiveSubjectAsset.element("asset/meta/mf-dicom-patient");
+			if (archiveDICOMMeta==null) return null;
 			String archivePatientID = archiveDICOMMeta.value("id");
+			if (archivePatientID==null) return null;
 
 			// Now, for each other Subject in this project, find it's equivalent Subject in the archive
 			// If it matches the Subject ID for the Subject of interest, we have a duplicate.
