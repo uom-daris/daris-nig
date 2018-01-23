@@ -484,7 +484,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 					fmpVisitID = mbc.create7TVisit(fmpSubjectID, vdate, height, weight, false);
 					w.add("visit-id", new String[]{"status", "created"}, fmpVisitID);
 					String notes = "Auto created by DaRIS service nig.pssd.mbic.mr.human.project.migrate at " + DateUtil.todaysTime() + " during archive migration to the Subject-centric structure";
-					mbc.updateStringInVisit(fmpSubjectID, vdate, fmpVisitID, "MRIvisitnotes", notes,  "7TMR", false);
+					mbc.updateStringInVisitLegacy (fmpSubjectID, vdate, fmpVisitID, "MRIvisitnotes", notes,  "7TMR", false);
 					created = true;
 				} else {
 					// We have a raw data set but we can't find the visit (probably ambiguous - there may be multiple DICOM visits but
@@ -618,7 +618,7 @@ public class SvcMBCHumanProjectMigrate extends PluginService {
 			// Finally, update the FMP visit ID with the new DaRIS Study ID and time.  We do this whether the VIsit
 			// was pre-existing or not, but only for DICOM  (one FMP Visit accomodates both DICOM and Raw)
 			if (isDICOM) {
-				mbc.updateStringInVisit(fmpVisitHolder.fmpPatientID(), null, fmpVisitHolder.fmpVisitID(), "MRDARIS_ID",  newStudyID, "7TMR", false);
+				mbc.updateStringInVisitLegacy(fmpVisitHolder.fmpPatientID(), null, fmpVisitHolder.fmpVisitID(), "MRDARIS_ID",  newStudyID, "7TMR", false);
 
 			}
 		}
