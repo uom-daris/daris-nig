@@ -1,6 +1,7 @@
 package nig.mf.plugin.pssd.ni;
 
 
+import nig.mf.plugin.pssd.util.ni.NIGDomainMetaData;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
 import arc.mf.plugin.PluginService;
 import arc.mf.plugin.dtype.AssetType;
@@ -10,11 +11,11 @@ import arc.xml.XmlDocMaker;
 import arc.xml.XmlWriter;
 
 public class SvcMBCStudyDICOMMetaGet extends PluginService {
-	
+
 	// THis is the type of the other-id.     It's ok to do this
 	// because this is an MBC service
 	private static final String TYPE = "Melbourne Brain Centre Imaging Unit";
-	
+
 	//
 	private Interface _defn;
 
@@ -40,7 +41,7 @@ public class SvcMBCStudyDICOMMetaGet extends PluginService {
 
 	@Override
 	public String description() {
-		return "Fetches the AccessionNumber from DICOM header and locates in daris:pssd-study/other-id with the correct type (Melbroune Brain Centre Imaging Unit).";
+		return "If the DICOM data are for the MBCIU PET/CT or 7T (checks station name) then fetches the AccessionNumber from DICOM header and locates in daris:pssd-study/other-id with the correct type (Melbourne Brain Centre Imaging Unit).";
 	}
 
 	@Override
@@ -77,11 +78,11 @@ public class SvcMBCStudyDICOMMetaGet extends PluginService {
 		if (studyCID == null) {
 			studyCID = CiteableIdUtil.idToCid(executor(), studyID);
 		}
-		
+
 		// Fetch the meta-data from the first child DICOM dataset
 		XmlDocMaker dm = new XmlDocMaker("args");
 		String where = "cid starts with '" + studyCID + "' and " +
-		               "model='om.pssd.dataset' and type='dicom/series'";
+				"model='om.pssd.dataset' and type='dicom/series'";
 		dm.add("where", where);
 		dm.add("size", "1");
 		dm.add("pipe-generate-result-xml", "true");
@@ -90,14 +91,18 @@ public class SvcMBCStudyDICOMMetaGet extends PluginService {
 		XmlDoc.Element r = executor().execute("asset.query", dm.root());
 		if (r==null) return;
 		//
-		String accessionNumber = r.value("de[@tag='00080050']/value");
-		if (accessionNumber!=null) {
-			dm = new XmlDocMaker("args");
-			dm.add("id", studyCID);
-			//
-			dm.add("other-id", new String[]{"type", TYPE}, accessionNumber);
-			w.add("other-id", new String[]{"type", TYPE}, accessionNumber);
-			executor().execute("om.pssd.study.update", dm.root());
+		String stationName =  r.value("de[@tag='00081010']/value");
+		if (stationName.equals(NIGDomainMetaData.MBCIU_MR7T_STATION) ||
+			stationName.equals(NIGDomainMetaData.MBCIU_PETCT_STATION)) {
+			String accessionNumber = r.value("de[@tag='00080050']/value");
+			if (accessionNumber!=null) {
+				dm = new XmlDocMaker("args");
+				dm.add("id", studyCID);
+				//
+				dm.add("other-id", new String[]{"type", TYPE}, accessionNumber);
+				w.add("other-id", new String[]{"type", TYPE}, accessionNumber);
+				executor().execute("om.pssd.study.update", dm.root());
+			}
 		}
 	}
 }

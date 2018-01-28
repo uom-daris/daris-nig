@@ -39,6 +39,10 @@ public class NIGDomainMetaData extends DomainMetaData {
 
 	private static final String LGH_FACILITY = "LGH";
 	private static final String DATE_FORMAT = "dd-MMM-yyyy";
+	
+    public static final String MBCIU_PETCT_STATION = "CTAWP71222";
+    public static final String MBCIU_MR7T_STATION = "MRC18978";
+
 
 	// Constructor
 	public NIGDomainMetaData () {
@@ -753,9 +757,9 @@ public class NIGDomainMetaData extends DomainMetaData {
 				return RCH_FACILITY;
 			} else if (station.equalsIgnoreCase("RHH-OC0") || station.equalsIgnoreCase("RHHOC0") || station.equalsIgnoreCase("af219_ws")) {
 				return RHH_FACILITY;
-			} else if (station.equalsIgnoreCase("CTAWP71222")) {
+			} else if (station.equalsIgnoreCase(MBCIU_PETCT_STATION)) {
 				return MBCIU_FACILITY_PETCT;
-			} else if (station.equalsIgnoreCase("MRC18978")) {
+			} else if (station.equalsIgnoreCase(MBCIU_MR7T_STATION)) {
 				return MBCIU_FACILITY_7T;
 			} else if (station.equalsIgnoreCase("EPT")) {
 				return AMRIF_FACILITY;
