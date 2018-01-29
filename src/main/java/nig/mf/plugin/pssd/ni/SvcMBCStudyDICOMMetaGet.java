@@ -92,8 +92,8 @@ public class SvcMBCStudyDICOMMetaGet extends PluginService {
 		if (r==null) return;
 		//
 		String stationName =  r.value("de[@tag='00081010']/value");
-		if (stationName.equals(NIGDomainMetaData.MBCIU_MR7T_STATION) ||
-			stationName.equals(NIGDomainMetaData.MBCIU_PETCT_STATION)) {
+		if (stationName!=null && (stationName.equals(NIGDomainMetaData.MBCIU_MR7T_STATION) ||
+			stationName.equals(NIGDomainMetaData.MBCIU_PETCT_STATION))) {
 			String accessionNumber = r.value("de[@tag='00080050']/value");
 			if (accessionNumber!=null) {
 				dm = new XmlDocMaker("args");
