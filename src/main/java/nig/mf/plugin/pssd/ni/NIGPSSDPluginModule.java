@@ -48,6 +48,9 @@ public class NIGPSSDPluginModule implements PluginModule {
 		// _svs.add(new SvcMBCProjectSet()); // No longer using DICOM Data model
 		// archive
 		// _svs.add(new SvcMBCSeriesSourceSet()); // One shot
+		//
+		_svs.add(new SvcMBCMRStudyStationNameSet());
+		//
 		_svs.add(new SvcMBCPETVarCheckOld());
 		_svs.add(new SvcMBCPETVarCheck());
 		_svs.add(new SvcMBCDoseUploadOld());
