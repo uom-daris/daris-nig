@@ -66,6 +66,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		_svs.add(new SvcMBCMRStudyRawMetaGet());
 		_svs.add(new SvcMBCMRDataSetRawMetaGet());
 		_svs.add(new SvcMBCVisitList());
+		_svs.add(new SvcMBCPETHasRaw());
 
 		// Test service
 		_svs.add(new SvcTesting());
