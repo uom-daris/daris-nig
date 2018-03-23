@@ -70,10 +70,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 
 		// Test service
 		_svs.add(new SvcTesting());
-		
-		// Hoffman lab one off
-		_svs.add(new SvcHoffmanMigrate());
-
+	
 	}
 
 	@Override
