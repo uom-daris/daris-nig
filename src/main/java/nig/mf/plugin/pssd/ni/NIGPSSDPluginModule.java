@@ -51,9 +51,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		//
 		_svs.add(new SvcMBCMRStudyStationNameSet());
 		//
-		_svs.add(new SvcMBCPETVarCheckOld());
 		_svs.add(new SvcMBCPETVarCheck());
-		_svs.add(new SvcMBCDoseUploadOld());
 		_svs.add(new SvcMBCDoseUpload());
 		_svs.add(new SvcMBCFMPUploads());
 		//
