@@ -182,11 +182,12 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 		w.push("FMP");
 		String projectName = petVisit.getString("Projectname");
 		String projectSubjectID = petVisit.getString("Projectsubjectid");
+		// If no project element (old visits), bug out.
+		if (projectName==null || projectSubjectID==null) return;
+
 		w.add("project-name", projectName);
 		w.add("project-subject-id", projectSubjectID);
 
-		// If no project element (old visits), bug out.
-		if (projectName==null || projectSubjectID==null) return;
 
 		// See if the project for this Visit is on the wanted list
 		boolean keep = false;
