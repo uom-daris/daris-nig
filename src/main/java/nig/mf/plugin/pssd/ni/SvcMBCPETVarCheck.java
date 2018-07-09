@@ -145,6 +145,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 		// Find one (good) PET DataSet under the given parent Study
 		String petDataSetCID = null;
+		String subject = "Errors found comparing PET DICOM meta-data with FileMakerPro data base entries";
 		if (!petIsChecked) {
 			String[] t = findPETDataSet(executor(), studyCID, iMax);
 			if (t != null) {
@@ -152,7 +153,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 					// No good PET data sets found
 					PluginLog.log().add(PluginLog.WARNING, t[1]);
 					if (email != null) {
-						send(executor(), email, t[1]);
+						send(executor(), subject, email, t[1]);
 					}
 					w.add("status", t[1]);
 				} else {
@@ -190,7 +191,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 					+ " indexed meta-data (daris:pssd-study/other-id) \n";
 			PluginLog.log().add(PluginLog.WARNING, error);
 			if(email!=null){
-				send(executor(), email, error);
+				send(executor(), subject, email, error);
 			}
 			w.add("FMP-visit-id", "not-found-in-DaRIS-Study");
 			return;
@@ -217,7 +218,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 			String error = "nig.pssd.mbc.petvar.check : could not retrieve the PET/CT visit from FileMakerPro for visit ID = " + fmpVisitID;
 			PluginLog.log().add(PluginLog.WARNING, error);
 			if(email!=null){
-				send(executor(), email, error);
+				send(executor(), subject, email, error);
 			}
 			mbc.closeConnection();
 			throw new Exception (error);
@@ -228,7 +229,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 						" FMP for visit ID = " + fmpVisitID;
 				PluginLog.log().add(PluginLog.WARNING, error);
 				if(email!=null){
-					send(executor(), email, error);
+					send(executor(), subject, email, error);
 				}
 				mbc.closeConnection();
 				throw new Exception (error);
@@ -245,7 +246,7 @@ public class SvcMBCPETVarCheck extends PluginService {
 		if (diff != null) {
 			PluginLog.log().add(PluginLog.WARNING, diff);
 			if(email!=null){
-				send(executor(), email, diff);
+				send(executor(), subject, email, diff);
 			}
 			w.add("status", diff);
 		}
@@ -364,14 +365,14 @@ public class SvcMBCPETVarCheck extends PluginService {
 
 	}
 
-	static public void send(ServiceExecutor executor, String email, String body)
+	static public void send(ServiceExecutor executor, String email, String subject, String body)
 			throws Throwable {
 		// Send email if errors were found
 		if (body != null) {
-			String subject = "Errors found comparing PET DICOM meta-data with FileMakerPro data base entries";
 			XmlDocMaker dm = new XmlDocMaker("args");
 			dm.add("async", "true");
 			dm.add("to", email);
+			dm.add("subject", subject);
 			dm.add("body", body);
 			dm.add("subject", subject);
 			executor.execute("mail.send", dm.root());

@@ -3,18 +3,18 @@ if { [ xvalue exists [asset.doc.namespace.exists :namespace "nig-daris"]] == "fa
 }
 
 # Document: nig-daris:pssd-mbic-fmp-check [version 1]
-#
+# Locate on a Study
 asset.doc.type.update :create yes :type nig-daris:pssd-mbic-fmp-check \
   :label "nig-daris:pssd-mbic-fmp-check" \
   :description "Check DICOM against FileMakerPro variables." \
   :definition < \
     :element -name "pet" -type "boolean" -min-occurs "0" -max-occurs "1" \
     < \
-      :description "Has a PET DataSet been checked (by nig.pssd.mbic.petvar.check)." \
+      :description "Has a PET DataSet in the Study been checked (by nig.pssd.mbic.petvar.check)." \
     > \
     :element -name "ct" -type "boolean" -min-occurs "0" -max-occurs "1" \
     < \
-      :description "Has a CT DataSet been checked ((by nig.pssd.mbic.petvar.check). " \
+      :description "Has a CT DataSet in the Study been checked ((by nig.pssd.mbic.petvar.check). " \
     > \
    :element -name "dose" -type "boolean" -min-occurs "0" -max-occurs "1" \
     < \
@@ -42,4 +42,16 @@ asset.doc.type.update :create yes :type nig-daris:ms-gait-subject \
             :description "The subject's MSG code (MRI)." > \
         :element -name ms-code -label "MS Code" -type string -encrypt true -min-occurs 0 -max-occurs 1 < \
             :description "The subject's MS code (Gait Lab)." > >
+
+# Document nig-daris:pssd-mbic-fmp-dataset-check
+# Locate on the DataSet
+asset.doc.type.update :create yes :type nig-daris:pssd-mbic-fmp-dataset-check  \
+  :label "nig-daris:pssd-mbic-fmp-dataset-check" \
+  :description "Check the DataSet against values in FMP and possibly update the DataSet" \
+  :definition < \
+    :element -name "dicom-project-id" -type "boolean" -min-occurs "0" -max-occurs "1" \
+    < \
+      :description "Has this DICOM DataSet been updated (DICOM element PatientComment) with the project-based subject ID supplied in FMP." \
+    > \
+   >
 

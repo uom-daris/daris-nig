@@ -55,7 +55,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		_svs.add(new SvcMBCDoseUpload());
 		_svs.add(new SvcMBCFMPUploads());
 		//
-		// One off processw completed
+		// One off process completed
 		//_svs.add(new SvcMBCHumanProjectMigrate());
 		//_svs.add(new SvcMBCNonHumanProjectMigrate());
 		//_svs.add(new SvcMBCEndUserProjectMigrate());
@@ -65,6 +65,7 @@ public class NIGPSSDPluginModule implements PluginModule {
 		_svs.add(new SvcMBCMRDataSetRawMetaGet());
 		_svs.add(new SvcMBCVisitList());
 		_svs.add(new SvcMBCPETHasRaw());
+		_svs.add(new SvcMBCProjectIDSetInDICOM());
 
 		// Test service
 		_svs.add(new SvcTesting());

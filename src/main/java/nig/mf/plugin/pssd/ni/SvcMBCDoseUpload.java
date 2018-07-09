@@ -140,6 +140,7 @@ public class SvcMBCDoseUpload extends PluginService {
 			return;
 		}
 		String fmpVisitID = SvcMBCPETVarCheck.findVisit(executor(), studyMeta);
+		String subject = "Errors found comparing PET DICOM meta-data with FileMakerPro data base entries";
 		if (fmpVisitID==null) {
 			// Skip this one with message
 			String error = "nig.pssd.mbic.dose.upload : For Study '"
@@ -147,7 +148,7 @@ public class SvcMBCDoseUpload extends PluginService {
 					+ " indexed meta-data (daris:pssd-study/other-id) \n";
 			PluginLog.log().add(PluginLog.WARNING, error);
 			if(email!=null){
-				SvcMBCPETVarCheck.send(executor(), email, error);
+				SvcMBCPETVarCheck.send(executor(), subject, email, error);
 			}
 			w.add("FMP-visit-id", "not-found-in-DaRIS-Study");
 			return;
@@ -176,7 +177,7 @@ public class SvcMBCDoseUpload extends PluginService {
 			String error = "nig.pssd.mbic.dose.upload : could not retrieve the PET/CT visit from FileMakerPro for visit ID = " + fmpVisitID;
 			PluginLog.log().add(PluginLog.WARNING, error);
 			if(email!=null){
-				SvcMBCPETVarCheck.send(executor(), email, error);
+				SvcMBCPETVarCheck.send(executor(), subject, email, error);
 			}
 			mbc.closeConnection();
 			throw new Exception (error);
@@ -187,7 +188,7 @@ public class SvcMBCDoseUpload extends PluginService {
 						" FMP for visit ID = " + fmpVisitID;
 				PluginLog.log().add(PluginLog.WARNING, error);
 				if(email!=null){
-					SvcMBCPETVarCheck.send(executor(), email, error);
+					SvcMBCPETVarCheck.send(executor(), subject, email, error);
 				}
 				mbc.closeConnection();
 				throw new Exception (error);
@@ -218,7 +219,7 @@ public class SvcMBCDoseUpload extends PluginService {
 			// send notification email with error message and stack trace
 			w.add("error", msg);
 			if (email != null) {
-				SvcMBCPETVarCheck.send(executor(), email, msg);
+				SvcMBCPETVarCheck.send(executor(), subject, email, msg);
 			}
 
 		}
