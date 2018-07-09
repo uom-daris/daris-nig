@@ -1,11 +1,8 @@
 package nig.mf.plugin.pssd.ni;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.sql.ResultSet;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
+import java.util.Vector;
 
 import arc.mf.plugin.PluginLog;
 import arc.mf.plugin.PluginService;
@@ -14,7 +11,6 @@ import arc.mf.plugin.dtype.AssetType;
 import arc.mf.plugin.dtype.BooleanType;
 import arc.mf.plugin.dtype.CiteableIdType;
 import arc.mf.plugin.dtype.EnumType;
-import arc.mf.plugin.dtype.IntegerType;
 import arc.mf.plugin.dtype.StringType;
 import arc.xml.XmlDoc;
 import arc.xml.XmlDocMaker;
@@ -23,12 +19,12 @@ import mbciu.commons.SQLUtil;
 import mbciu.mbc.MBCFMP;
 import nig.mf.plugin.util.AssetUtil;
 import nig.mf.pssd.plugin.util.CiteableIdUtil;
-import nig.util.DateUtil;
 
 public class SvcMBCProjectIDSetInDICOM extends PluginService {
 	// Relative location of resource file on server
 	private static final String FMP_CRED_REL_PATH = "/.fmp/petct_fmpcheck";
 	private static final String EMAIL = "williamsr@unimelb.edu.au";
+	private static final String[] PROJECT_LIST = {"threed"};
 
 	private Interface _defn;
 
@@ -103,7 +99,15 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 			email = null;
 		}
 		// Allowed projects
-		Collection<String> projects = args.values("project");
+		Collection<String> projectsLocal = args.values("project");
+		Vector<String> projects = new Vector<String>();
+		if (projectsLocal==null) {
+			for (String PROJECT : PROJECT_LIST) {
+				projects.add(PROJECT);
+			}
+		} else {
+			projects.addAll(projectsLocal);
+		}
 
 
 		// Check
@@ -191,7 +195,7 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 
 		// See if the project for this Visit is on the wanted list
 		boolean keep = false;
-		if (projects!=null) {
+		if (projects.size()>0) {
 			for (String project : projects) {
 				if (project.equalsIgnoreCase(projectName)) {
 					keep = true;
@@ -202,7 +206,6 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 		}
 		w.add("keep", keep);
 		w.pop();
-
 		if (!keep) return;
 
 		// Update the DICOM files.
