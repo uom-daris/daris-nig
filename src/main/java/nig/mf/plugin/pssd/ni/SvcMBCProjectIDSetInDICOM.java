@@ -35,13 +35,13 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 
 		Interface.Element me = new Interface.Element("cid",
 				CiteableIdType.DEFAULT,
-				"The citeable ID of the parent Study holding the SR DICOM modality DataSet.",
+				"The citeable ID of the parent Study holding the DICOM modality DataSets.",
 				0, 1);
 
 		_defn.add(me);
 		//
 		me = new Interface.Element("id", AssetType.DEFAULT,
-				"The asset ID (not citeable) of the parent Study holding the SR DICOM modality DataSet..",
+				"The asset ID (not citeable) of the parent Study holding the DICOM modality DataSets.",
 				0, 1);
 		_defn.add(me);
 		//
