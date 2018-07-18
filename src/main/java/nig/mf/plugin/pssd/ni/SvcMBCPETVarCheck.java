@@ -374,7 +374,6 @@ public class SvcMBCPETVarCheck extends PluginService {
 			dm.add("to", email);
 			dm.add("subject", subject);
 			dm.add("body", body);
-			dm.add("subject", subject);
 			executor.execute("mail.send", dm.root());
 		}
 	}

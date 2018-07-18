@@ -120,6 +120,11 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 
 		// Find the FMP Visit ID from the STudy meta-data
 		XmlDoc.Element studyMeta = AssetUtil.getAsset(executor(), studyCID, null);
+		
+		// We only want DICOM
+		if (studyMeta.element("asset/meta/mf-dicom-study") == null) return;
+	
+		//
 		String fmpVisitID = SvcMBCPETVarCheck.findVisit(executor(), studyMeta);
 		if (fmpVisitID==null) {
 			// Skip this one with message
@@ -129,7 +134,7 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 			PluginLog.log().add(PluginLog.WARNING, error);
 			if(email!=null){
 				String subject = "Error in service to update DICOM meta-data with project-based subject ID for Study "+studyCID;
-				SvcMBCPETVarCheck.send(executor(), subject, email, error);
+				SvcMBCPETVarCheck.send(executor(), email, subject, error);
 			}
 			w.add("FMP-visit-id", "not-found-in-DaRIS-Study");
 			return;
@@ -159,7 +164,7 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 			String error = "nig.pssd.mbic.dicom.project-id.set : could not retrieve the PET/CT visit from FileMakerPro for visit ID = " + fmpVisitID;
 			PluginLog.log().add(PluginLog.WARNING, error);
 			if(email!=null){
-				SvcMBCPETVarCheck.send(executor(), subject, email, error);
+				SvcMBCPETVarCheck.send(executor(), email, subject, error);
 			}
 			mbc.closeConnection();
 			throw new Exception (error);
@@ -171,7 +176,7 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 						" FMP for visit ID = " + fmpVisitID;
 				PluginLog.log().add(PluginLog.WARNING, error);
 				if(email!=null){
-					SvcMBCPETVarCheck.send(executor(), subject, email, error);
+					SvcMBCPETVarCheck.send(executor(), email, subject, error);
 				}
 				mbc.closeConnection();
 				throw new Exception (error);
@@ -212,7 +217,7 @@ public class SvcMBCProjectIDSetInDICOM extends PluginService {
 		Boolean updated = updateDICOM (executor(), studyCID, projectName, projectSubjectID, w);
 		if (updated && email!=null) {
 			String subject = "Update DICOM meta-data with project-based subject ID for Study "+studyCID;
-			SvcMBCPETVarCheck.send(executor(), subject, email, "DICOM data sets for study '"+ studyCID + "' were updated with the project-based subject ID for project '" + projectName + "'");
+			SvcMBCPETVarCheck.send(executor(), email, subject, "DICOM data sets for study '"+ studyCID + "' were updated with the project-based subject ID for project '" + projectName + "'");
 		}
 
 	}
